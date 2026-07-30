@@ -1,28 +1,34 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Line,
-  LineChart,
-  Pie,
-  PieChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { Building2, CheckCircle2, DollarSign, ShieldCheck, Users, XCircle } from "lucide-react";
+  CheckCircle2,
+  Loader2,
+  Pencil,
+  Plus,
+  ShieldCheck,
+  Trash2,
+  Upload,
+  XCircle,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -31,67 +37,258 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchBookings, fetchPendingBusinesses, updateBookingStatus } from "@/lib/api";
-import type { Booking, Listing } from "@/lib/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { useAuth } from "@/hooks/use-auth";
+import {
+  createListing,
+  deleteListing,
+  fetchAllListingsAdmin,
+  fetchBookings,
+  inviteAdmin,
+  listAdmins,
+  removeAdminInvite,
+  updateBookingStatus,
+  updateListing,
+} from "@/lib/api";
+import { isMainAdminEmail } from "@/lib/constants";
+import { filesToImageText } from "@/lib/image-text";
+import type { Booking, Listing, ListingInput, ListingKind } from "@/lib/types";
 import { peso } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
-      { title: "Admin Console — Approvals & Revenue | ExploreHub" },
+      { title: "Admin Console — Approvals & Content | ExploreHub" },
       {
         name: "description",
         content:
-          "Approve business listings, moderate bookings and track marketplace revenue, categories and growth across the ExploreHub network.",
+          "Approve bookings, manage tours, stays and dining, invite admins, and keep the ExploreHub marketplace current.",
       },
-      { property: "og:title", content: "Admin Console | ExploreHub" },
-      { property: "og:description", content: "Approvals, moderation and revenue analytics for the ExploreHub marketplace." },
     ],
   }),
   component: Admin,
 });
 
-const revenueData = [
-  { month: "Feb", revenue: 42000, bookings: 210 },
-  { month: "Mar", revenue: 51500, bookings: 268 },
-  { month: "Apr", revenue: 47800, bookings: 244 },
-  { month: "May", revenue: 68200, bookings: 331 },
-  { month: "Jun", revenue: 74900, bookings: 372 },
-  { month: "Jul", revenue: 91300, bookings: 448 },
-];
-
-const mixData = [
-  { name: "Tours", value: 42, color: "var(--color-primary)" },
-  { name: "Stays", value: 34, color: "var(--color-accent)" },
-  { name: "Dining", value: 24, color: "var(--color-warning)" },
-];
+const emptyForm = (): ListingInput & { id?: string } => ({
+  kind: "tour",
+  title: "",
+  tagline: "",
+  description: "",
+  destination: "El Nido",
+  country: "Palawan",
+  category: "Experience",
+  price: 0,
+  unit: "per person",
+  images: [],
+  amenities: [],
+  tags: [],
+  businessName: "",
+  featured: false,
+  status: "approved",
+  cancellationPolicy: "Free cancellation up to 48 hours before.",
+});
 
 function Admin() {
+  const { user, ready, isAdmin } = useAuth();
+  const navigate = useNavigate();
   const qc = useQueryClient();
-  const pending = useQuery({ queryKey: ["pending-businesses"], queryFn: fetchPendingBusinesses });
-  const bookings = useQuery({ queryKey: ["bookings"], queryFn: fetchBookings });
+
+  useEffect(() => {
+    if (!ready) return;
+    if (!user) {
+      toast.error("Sign in with an admin account to open the console");
+      navigate({ to: "/auth" });
+      return;
+    }
+    if (!isAdmin) {
+      toast.error("This account is not an admin");
+      navigate({ to: "/dashboard" });
+    }
+  }, [ready, user, isAdmin, navigate]);
+
+  const bookings = useQuery({
+    queryKey: ["bookings"],
+    queryFn: fetchBookings,
+    enabled: !!isAdmin,
+  });
+  const listings = useQuery({
+    queryKey: ["admin-listings"],
+    queryFn: fetchAllListingsAdmin,
+    enabled: !!isAdmin,
+  });
+  const admins = useQuery({
+    queryKey: ["admin-team", user?.email],
+    queryFn: () => listAdmins(user!.email),
+    enabled: !!isAdmin && !!user,
+  });
+
+  const pendingBookings = useMemo(
+    () => bookings.data?.filter((b) => b.status === "pending") ?? [],
+    [bookings.data],
+  );
 
   const moderate = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: "confirmed" | "rejected" }) =>
+    mutationFn: ({ id, status }: { id: string; status: "confirmed" | "rejected" | "approved" }) =>
       updateBookingStatus(id, status),
     onSuccess: ({ id, status }) => {
       qc.setQueryData<Booking[]>(["bookings"], (old) =>
         old?.map((b) => (b.id === id ? { ...b, status } : b)),
       );
+      void qc.invalidateQueries({ queryKey: ["bookings"] });
       toast.success(`Booking ${status}`);
     },
+    onError: () => toast.error("Could not update booking"),
   });
 
-  const approve = useMutation({
-    mutationFn: async ({ id }: { id: string; approved: boolean }) => id,
-    onSuccess: (id, vars) => {
-      qc.setQueryData<Listing[]>(["pending-businesses"], (old) => old?.filter((l) => l.id !== id));
-      toast.success(vars.approved ? "Business approved" : "Application rejected");
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [form, setForm] = useState(emptyForm());
+  const [amenitiesText, setAmenitiesText] = useState("");
+  const [tagsText, setTagsText] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [uploading, setUploading] = useState(false);
+
+  const openCreate = (kind: ListingKind = "tour") => {
+    setForm({ ...emptyForm(), kind });
+    setAmenitiesText("");
+    setTagsText("");
+    setEditorOpen(true);
+  };
+
+  const openEdit = (listing: Listing) => {
+    setForm({
+      id: listing.id,
+      kind: listing.kind,
+      title: listing.title,
+      tagline: listing.tagline,
+      description: listing.description,
+      destination: listing.destination,
+      country: listing.country,
+      category: listing.category,
+      price: listing.price,
+      unit: listing.unit,
+      images: listing.images,
+      amenities: listing.amenities,
+      tags: listing.tags,
+      businessName: listing.businessName,
+      featured: !!listing.featured,
+      status: listing.status,
+      durationDays: listing.durationDays,
+      seatsLeft: listing.seatsLeft,
+      discountPct: listing.discountPct,
+      cancellationPolicy: listing.cancellationPolicy,
+    });
+    setAmenitiesText(listing.amenities.join(", "));
+    setTagsText(listing.tags.join(", "));
+    setEditorOpen(true);
+  };
+
+  const saveListing = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not signed in");
+      const payload: ListingInput = {
+        ...form,
+        amenities: amenitiesText
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        tags: tagsText
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
+        images: form.images.length
+          ? form.images
+          : [
+              "data:image/svg+xml," +
+                encodeURIComponent(
+                  '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect fill="#0b2b2b" width="100%" height="100%"/><text x="50%" y="50%" fill="#c9a96e" font-size="28" text-anchor="middle" dy=".3em">ExploreHub</text></svg>',
+                ),
+            ],
+      };
+      if (form.id) return updateListing(user.email, form.id, payload);
+      return createListing(user.email, payload);
+    },
+    onSuccess: () => {
+      toast.success(form.id ? "Listing updated" : "Listing published");
+      setEditorOpen(false);
+      void qc.invalidateQueries({ queryKey: ["admin-listings"] });
+      void qc.invalidateQueries({ queryKey: ["featured"] });
+      void qc.invalidateQueries({ queryKey: ["trending"] });
+      void qc.invalidateQueries({ queryKey: ["recent"] });
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : "Save failed"),
+  });
+
+  const removeListing = useMutation({
+    mutationFn: (id: string) => deleteListing(user!.email, id),
+    onSuccess: () => {
+      toast.success("Listing deleted");
+      void qc.invalidateQueries({ queryKey: ["admin-listings"] });
+    },
+    onError: () => toast.error("Could not delete listing"),
+  });
+
+  const invite = useMutation({
+    mutationFn: () => inviteAdmin(user!.email, inviteEmail),
+    onSuccess: (result) => {
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Admin invite saved — they become admin when they register");
+      setInviteEmail("");
+      void qc.invalidateQueries({ queryKey: ["admin-team"] });
+    },
+    onError: () => toast.error("Invite failed"),
+  });
+
+  const revoke = useMutation({
+    mutationFn: (email: string) => removeAdminInvite(user!.email, email),
+    onSuccess: (result) => {
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Invite removed");
+      void qc.invalidateQueries({ queryKey: ["admin-team"] });
     },
   });
 
+  const onUploadImages = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setUploading(true);
+    try {
+      const texts = await filesToImageText(files);
+      if (!texts.length) {
+        toast.error("Choose image files only");
+        return;
+      }
+      setForm((f) => ({ ...f, images: [...f.images, ...texts].slice(0, 6) }));
+      toast.success("Images converted to compact text and ready to publish");
+    } catch {
+      toast.error("Could not process images");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (!ready || !isAdmin) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center pt-28">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  const mainAdmin = user ? isMainAdminEmail(user.email) : false;
+
   return (
-    <div className="pt-28">
+    <div className="pt-28 pb-16">
       <div className="container-x">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
           <div className="min-w-0">
@@ -99,202 +296,437 @@ function Admin() {
               <ShieldCheck className="size-3.5" /> Administrator
             </span>
             <h1 className="mt-4 truncate text-3xl font-semibold sm:text-4xl">Marketplace console</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Signed in as {user?.email}
+              {mainAdmin ? " · Main admin" : ""}
+            </p>
           </div>
           <Badge className="shrink-0 rounded-full border-0 bg-success/15 text-success">
-            All systems healthy
+            Live sync on
           </Badge>
         </div>
 
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard icon={DollarSign} label="Revenue this month" value="₱5.1M" delta="+22%" index={0} />
-          <StatCard icon={Users} label="Active tourists" value="12,480" delta="+8.4%" index={1} />
-          <StatCard icon={Building2} label="Partner businesses" value="642" delta="+31" index={2} />
-          <StatCard icon={CheckCircle2} label="Pending approvals" value={String(pending.data?.length ?? 0)} delta="-4" index={3} />
-        </div>
-
-        <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-          <div className="rounded-3xl border border-border bg-card p-6 shadow-soft">
-            <h2 className="font-display text-lg font-semibold">Revenue & booking volume</h2>
-            <div className="mt-6 h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={revenueData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                  <XAxis dataKey="month" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip
-                    cursor={{ fill: "var(--color-muted)" }}
-                    contentStyle={{
-                      borderRadius: "1rem",
-                      border: "1px solid var(--color-border)",
-                      background: "var(--color-card)",
-                      color: "var(--color-card-foreground)",
-                    }}
-                  />
-                  <Bar dataKey="revenue" fill="var(--color-primary)" radius={[10, 10, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">Pending bookings</p>
+            <p className="mt-2 font-display text-3xl font-semibold">{pendingBookings.length}</p>
           </div>
-
-          <div className="rounded-3xl border border-border bg-card p-6 shadow-soft">
-            <h2 className="font-display text-lg font-semibold">Category mix</h2>
-            <div className="mt-2 h-52 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={mixData} dataKey="value" innerRadius={54} outerRadius={82} paddingAngle={4} strokeWidth={0}>
-                    {mixData.map((d) => (
-                      <Cell key={d.name} fill={d.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      borderRadius: "1rem",
-                      border: "1px solid var(--color-border)",
-                      background: "var(--color-card)",
-                      color: "var(--color-card-foreground)",
-                    }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <ul className="mt-4 space-y-2">
-              {mixData.map((d) => (
-                <li key={d.name} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2">
-                    <span className="size-2.5 rounded-full" style={{ background: d.color }} />
-                    {d.name}
-                  </span>
-                  <span className="font-medium">{d.value}%</span>
-                </li>
-              ))}
-            </ul>
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">Listings</p>
+            <p className="mt-2 font-display text-3xl font-semibold">{listings.data?.length ?? 0}</p>
+          </div>
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">Admins</p>
+            <p className="mt-2 font-display text-3xl font-semibold">
+              {admins.data?.ok ? admins.data.admins.length : "—"}
+            </p>
           </div>
         </div>
 
         <div className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-soft">
-          <Tabs defaultValue="businesses">
-            <TabsList className="rounded-full">
-              <TabsTrigger value="businesses" className="rounded-full">Business approvals</TabsTrigger>
-              <TabsTrigger value="bookings" className="rounded-full">Booking moderation</TabsTrigger>
+          <Tabs defaultValue="bookings">
+            <TabsList className="flex h-auto flex-wrap rounded-full">
+              <TabsTrigger value="bookings" className="rounded-full">
+                Bookings
+              </TabsTrigger>
+              <TabsTrigger value="content" className="rounded-full">
+                Tours · Stays · Dining
+              </TabsTrigger>
+              <TabsTrigger value="admins" className="rounded-full">
+                Admins
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="businesses" className="mt-6 space-y-4">
-              {pending.isLoading
-                ? Array.from({ length: 3 }).map((_, i) => (
-                    <Skeleton key={i} className="h-24 w-full rounded-2xl" />
-                  ))
-                : null}
-              {pending.data?.map((l) => (
-                <div
-                  key={l.id}
-                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border border-border p-4 sm:flex sm:justify-between"
-                >
-                  <div className="flex min-w-0 items-center gap-4">
-                    <img src={l.images[0]} alt="" loading="lazy" className="size-14 shrink-0 rounded-xl object-cover" />
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold">{l.businessName}</p>
-                      <p className="truncate text-sm text-muted-foreground">
-                        {l.category} · {l.destination}, {l.country}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="rounded-full"
-                      onClick={() => approve.mutate({ id: l.id, approved: false })}
-                    >
-                      <XCircle className="size-4" /> Reject
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="hero"
-                      className="rounded-full"
-                      onClick={() => approve.mutate({ id: l.id, approved: true })}
-                    >
-                      <CheckCircle2 className="size-4" /> Approve
-                    </Button>
-                  </div>
-                </div>
-              ))}
-              {pending.data?.length === 0 ? (
+            <TabsContent value="bookings" className="mt-6 overflow-x-auto">
+              {bookings.isLoading ? (
+                <Skeleton className="h-40 w-full rounded-2xl" />
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Reference</TableHead>
+                      <TableHead>Guest</TableHead>
+                      <TableHead>Listing</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Moderate</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {bookings.data?.map((b) => (
+                      <TableRow key={b.id}>
+                        <TableCell className="font-mono text-xs">{b.reference}</TableCell>
+                        <TableCell>
+                          <div className="min-w-0">
+                            <p className="truncate whitespace-nowrap font-medium">{b.customer}</p>
+                            {b.customerEmail ? (
+                              <p className="truncate text-xs text-muted-foreground">{b.customerEmail}</p>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="max-w-[220px] truncate">{b.listingTitle}</TableCell>
+                        <TableCell className="whitespace-nowrap">{b.date}</TableCell>
+                        <TableCell>{peso(b.total)}</TableCell>
+                        <TableCell>
+                          <StatusBadge status={b.status} />
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {b.status === "pending" ? (
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="rounded-full"
+                                disabled={moderate.isPending}
+                                onClick={() => moderate.mutate({ id: b.id, status: "rejected" })}
+                              >
+                                <XCircle className="size-4" /> Reject
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-full"
+                                disabled={moderate.isPending}
+                                onClick={() => moderate.mutate({ id: b.id, status: "confirmed" })}
+                              >
+                                <CheckCircle2 className="size-4" /> Approve
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              {!bookings.isLoading && !bookings.data?.length ? (
                 <p className="py-12 text-center text-sm text-muted-foreground">
-                  No applications waiting for review.
+                  No bookings yet. Client reservations will appear here automatically.
                 </p>
               ) : null}
             </TabsContent>
 
-            <TabsContent value="bookings" className="mt-6 overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Reference</TableHead>
-                    <TableHead>Guest</TableHead>
-                    <TableHead>Listing</TableHead>
-                    <TableHead>Total</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Moderate</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {bookings.data?.map((b) => (
-                    <TableRow key={b.id}>
-                      <TableCell className="font-mono text-xs">{b.reference}</TableCell>
-                      <TableCell className="whitespace-nowrap">{b.customer}</TableCell>
-                      <TableCell className="max-w-[220px] truncate">{b.listingTitle}</TableCell>
-                      <TableCell>{peso(b.total)}</TableCell>
-                      <TableCell><StatusBadge status={b.status} /></TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="rounded-full"
-                            onClick={() => moderate.mutate({ id: b.id, status: "rejected" })}
-                          >
-                            Reject
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-full"
-                            onClick={() => moderate.mutate({ id: b.id, status: "confirmed" })}
-                          >
-                            Confirm
-                          </Button>
+            <TabsContent value="content" className="mt-6 space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <Button className="rounded-full" variant="hero" onClick={() => openCreate("tour")}>
+                  <Plus className="size-4" /> Add tour
+                </Button>
+                <Button className="rounded-full" variant="outline" onClick={() => openCreate("stay")}>
+                  <Plus className="size-4" /> Add stay
+                </Button>
+                <Button
+                  className="rounded-full"
+                  variant="outline"
+                  onClick={() => openCreate("restaurant")}
+                >
+                  <Plus className="size-4" /> Add dining
+                </Button>
+              </div>
+
+              {listings.isLoading
+                ? Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-20 w-full rounded-2xl" />
+                  ))
+                : listings.data?.map((l) => (
+                    <div
+                      key={l.id}
+                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border border-border p-4"
+                    >
+                      <div className="flex min-w-0 items-center gap-4">
+                        <img
+                          src={l.images[0]}
+                          alt=""
+                          className="size-14 shrink-0 rounded-xl object-cover"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold">{l.title}</p>
+                          <p className="truncate text-sm text-muted-foreground">
+                            {l.kind} · {l.destination} · {peso(l.price)}
+                          </p>
                         </div>
-                      </TableCell>
-                    </TableRow>
+                      </div>
+                      <div className="flex shrink-0 gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full"
+                          onClick={() => openEdit(l)}
+                        >
+                          <Pencil className="size-4" /> Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="rounded-full text-destructive"
+                          disabled={removeListing.isPending}
+                          onClick={() => {
+                            if (confirm(`Delete “${l.title}”?`)) removeListing.mutate(l.id);
+                          }}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
+            </TabsContent>
+
+            <TabsContent value="admins" className="mt-6 space-y-6">
+              {mainAdmin ? (
+                <form
+                  className="flex flex-col gap-3 sm:flex-row"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    invite.mutate();
+                  }}
+                >
+                  <Input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="colleague@email.com"
+                    className="h-11 rounded-xl"
+                    required
+                  />
+                  <Button type="submit" variant="hero" className="rounded-full" disabled={invite.isPending}>
+                    {invite.isPending ? <Loader2 className="size-4 animate-spin" /> : "Invite as admin"}
+                  </Button>
+                </form>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Only the main admin ({`sheethappenswithjaa@gmail.com`}) can invite other admins.
+                </p>
+              )}
+
+              <div>
+                <h3 className="text-sm font-semibold">Pending invites</h3>
+                <ul className="mt-3 space-y-2">
+                  {admins.data?.ok && admins.data.invites.length
+                    ? admins.data.invites.map((email) => (
+                        <li
+                          key={email}
+                          className="flex items-center justify-between rounded-2xl border border-border px-4 py-3 text-sm"
+                        >
+                          <span>{email}</span>
+                          {mainAdmin ? (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="rounded-full"
+                              onClick={() => revoke.mutate(email)}
+                            >
+                              Remove
+                            </Button>
+                          ) : null}
+                        </li>
+                      ))
+                    : (
+                      <p className="text-sm text-muted-foreground">No pending invites.</p>
+                    )}
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-semibold">Active admins</h3>
+                <ul className="mt-3 space-y-2">
+                  {admins.data?.ok
+                    ? admins.data.admins.map((a) => (
+                        <li
+                          key={a.email}
+                          className="rounded-2xl border border-border px-4 py-3 text-sm"
+                        >
+                          <p className="font-medium">{a.name}</p>
+                          <p className="text-muted-foreground">{a.email}</p>
+                        </li>
+                      ))
+                    : null}
+                </ul>
+              </div>
             </TabsContent>
           </Tabs>
         </div>
 
-        <div className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-soft">
-          <h2 className="font-display text-lg font-semibold">Booking growth</h2>
-          <div className="mt-6 h-56 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={revenueData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" vertical={false} />
-                <XAxis dataKey="month" stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="var(--color-muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: "1rem",
-                    border: "1px solid var(--color-border)",
-                    background: "var(--color-card)",
-                    color: "var(--color-card-foreground)",
-                  }}
-                />
-                <Line type="monotone" dataKey="bookings" stroke="var(--color-primary)" strokeWidth={3} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
+        <p className="mt-6 text-center text-xs text-muted-foreground">
+          <Link to="/dashboard" className="underline-offset-4 hover:underline">
+            Back to traveller dashboard
+          </Link>
+        </p>
       </div>
+
+      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">
+              {form.id ? "Edit listing" : "Add listing"}
+            </DialogTitle>
+            <DialogDescription>
+              Photos are compressed into text data-URLs so they still display as images without
+              storage quota.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-2 grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Kind</Label>
+              <Select
+                value={form.kind}
+                onValueChange={(v) => setForm((f) => ({ ...f, kind: v as ListingKind }))}
+              >
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-2xl">
+                  <SelectItem value="tour">Tour</SelectItem>
+                  <SelectItem value="stay">Stay</SelectItem>
+                  <SelectItem value="restaurant">Dining</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Title</Label>
+              <Input
+                className="h-11 rounded-xl"
+                value={form.title}
+                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Tagline</Label>
+              <Input
+                className="h-11 rounded-xl"
+                value={form.tagline}
+                onChange={(e) => setForm((f) => ({ ...f, tagline: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Description</Label>
+              <Textarea
+                className="min-h-28 rounded-xl"
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Destination</Label>
+              <Input
+                className="h-11 rounded-xl"
+                value={form.destination}
+                onChange={(e) => setForm((f) => ({ ...f, destination: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Input
+                className="h-11 rounded-xl"
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Price (PHP)</Label>
+              <Input
+                type="number"
+                className="h-11 rounded-xl"
+                value={form.price}
+                onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value) }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Unit</Label>
+              <Input
+                className="h-11 rounded-xl"
+                value={form.unit}
+                onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Business name</Label>
+              <Input
+                className="h-11 rounded-xl"
+                value={form.businessName}
+                onChange={(e) => setForm((f) => ({ ...f, businessName: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Amenities (comma-separated)</Label>
+              <Input
+                className="h-11 rounded-xl"
+                value={amenitiesText}
+                onChange={(e) => setAmenitiesText(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Tags (comma-separated)</Label>
+              <Input
+                className="h-11 rounded-xl"
+                value={tagsText}
+                onChange={(e) => setTagsText(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Photos</Label>
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-border px-4 py-8 text-sm text-muted-foreground hover:bg-muted/40">
+                <Upload className="size-4" />
+                {uploading ? "Compressing to text…" : "Upload images (stored as text)"}
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  disabled={uploading}
+                  onChange={(e) => void onUploadImages(e.target.files)}
+                />
+              </label>
+              {form.images.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {form.images.map((src, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      className="relative"
+                      onClick={() =>
+                        setForm((f) => ({
+                          ...f,
+                          images: f.images.filter((_, idx) => idx !== i),
+                        }))
+                      }
+                      title="Remove"
+                    >
+                      <img src={src} alt="" className="size-16 rounded-xl object-cover" />
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <div className="flex items-center justify-between rounded-2xl border border-border px-4 py-3 sm:col-span-2">
+              <div>
+                <p className="text-sm font-medium">Featured on homepage</p>
+                <p className="text-xs text-muted-foreground">Appear in editor picks</p>
+              </div>
+              <Switch
+                checked={!!form.featured}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, featured: v }))}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex justify-end gap-2">
+            <Button variant="outline" className="rounded-full" onClick={() => setEditorOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="hero"
+              className="rounded-full"
+              disabled={saveListing.isPending || !form.title || !form.description}
+              onClick={() => saveListing.mutate()}
+            >
+              {saveListing.isPending ? <Loader2 className="size-4 animate-spin" /> : "Save listing"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

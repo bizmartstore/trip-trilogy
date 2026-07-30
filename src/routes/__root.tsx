@@ -14,6 +14,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Toaster } from "@/components/ui/sonner";
+import { useRealtimeSync } from "@/hooks/use-realtime-sync";
 
 
 function NotFoundComponent() {
@@ -159,12 +160,18 @@ function useNoZoom() {
   }, []);
 }
 
+function RealtimeBridge() {
+  useRealtimeSync(4000);
+  return null;
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   useNoZoom();
 
   return (
     <QueryClientProvider client={queryClient}>
+      <RealtimeBridge />
       <Navbar />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <main className="min-h-screen">

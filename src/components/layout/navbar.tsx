@@ -36,7 +36,7 @@ const nav = [
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const { theme, toggle } = useTheme();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const overHero = pathname === "/" && !scrolled;
@@ -157,11 +157,13 @@ export function Navbar() {
                     <LayoutDashboard className="size-4" /> My dashboard
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link to="/admin">
-                    <LayoutDashboard className="size-4" /> Admin console
-                  </Link>
-                </DropdownMenuItem>
+                {isAdmin ? (
+                  <DropdownMenuItem asChild>
+                    <Link to="/admin">
+                      <LayoutDashboard className="size-4" /> Admin console
+                    </Link>
+                  </DropdownMenuItem>
+                ) : null}
                 <DropdownMenuSeparator />
                 {user ? (
                   <DropdownMenuItem onSelect={() => signOut()}>Sign out</DropdownMenuItem>
@@ -213,9 +215,11 @@ export function Navbar() {
                   <Link to="/dashboard" onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-medium hover:bg-muted">
                     My dashboard
                   </Link>
-                  <Link to="/admin" onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-medium hover:bg-muted">
-                    Admin console
-                  </Link>
+                  {isAdmin ? (
+                    <Link to="/admin" onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-medium hover:bg-muted">
+                      Admin console
+                    </Link>
+                  ) : null}
                   {user ? (
                     <Button
                       className="mt-4 rounded-full"

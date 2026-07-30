@@ -18,16 +18,11 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import heroImage from "@/assets/hero.jpg";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
 import { signInUser } from "@/hooks/use-auth";
+import { registerAccount, signInAccount } from "@/lib/api";
+import { isMainAdminEmail } from "@/lib/constants";
 
 const signInSchema = z.object({
   email: z.string().trim().email("Enter a valid email").max(160),
@@ -36,7 +31,6 @@ const signInSchema = z.object({
 
 const signUpSchema = signInSchema.extend({
   name: z.string().trim().min(2, "Enter your name").max(80),
-  role: z.enum(["tourist", "owner"]),
 });
 
 export const Route = createFileRoute("/auth")({
@@ -46,10 +40,13 @@ export const Route = createFileRoute("/auth")({
       {
         name: "description",
         content:
-          "Sign in to manage your ExploreHub bookings, or create a tourist or business owner account to start listing and booking travel experiences.",
+          "Sign in to manage your ExploreHub bookings, or create a traveller account to start booking Palawan experiences.",
       },
       { property: "og:title", content: "Sign In | ExploreHub" },
-      { property: "og:description", content: "Access your ExploreHub trips, bookings and business listings." },
+      {
+        property: "og:description",
+        content: "Access your ExploreHub trips and bookings.",
+      },
     ],
   }),
   component: Auth,
@@ -66,22 +63,54 @@ function Auth() {
 
   const signUp = useForm<z.infer<typeof signUpSchema>>({
     resolver: zodResolver(signUpSchema),
-    defaultValues: { name: "", email: "", password: "", role: "tourist" },
+    defaultValues: { name: "", email: "", password: "" },
   });
 
-  const submit = (mode: "in" | "up") => {
+  const afterAuth = (account: { name: string; email: string; role: "tourist" | "admin"; picture?: string }) => {
+    signInUser({
+      name: account.name,
+      email: account.email,
+      role: account.role,
+      picture: account.picture,
+    });
+    if (account.role === "admin") {
+      toast.success(
+        isMainAdminEmail(account.email)
+          ? "Welcome, main admin"
+          : "Welcome, admin",
+      );
+      navigate({ to: "/admin" });
+      return;
+    }
+    toast.success("Welcome");
+    navigate({ to: "/dashboard" });
+  };
+
+  const submit = async (mode: "in" | "up") => {
     setLoading(true);
-    setTimeout(() => {
+    try {
+      if (mode === "up") {
+        const values = signUp.getValues();
+        const result = await registerAccount(values);
+        if (!result.ok) {
+          toast.error(result.error);
+          return;
+        }
+        afterAuth(result.account);
+      } else {
+        const values = signIn.getValues();
+        const result = await signInAccount(values);
+        if (!result.ok) {
+          toast.error(result.error);
+          return;
+        }
+        afterAuth(result.account);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong. Try again.");
+    } finally {
       setLoading(false);
-      const values = mode === "in" ? signIn.getValues() : signUp.getValues();
-      signInUser({
-        name: mode === "up" ? signUp.getValues("name") : values.email.split("@")[0],
-        email: values.email,
-        role: mode === "up" ? signUp.getValues("role") : "tourist",
-      });
-      toast.success(mode === "in" ? "Welcome back" : "Account created");
-      navigate({ to: "/dashboard" });
-    }, 800);
+    }
   };
 
   return (
@@ -94,7 +123,7 @@ function Auth() {
             Every great trip starts with a single search.
           </h2>
           <p className="mt-4 max-w-md text-white/75">
-            Join 12,000+ travellers booking tours, stays and tables across Palawan.
+            Create a free traveller account to book tours, stays and tables across Palawan.
           </p>
         </div>
       </div>
@@ -110,7 +139,6 @@ function Auth() {
             <Compass className="size-6 text-primary" /> ExploreHub
           </span>
 
-
           <div className="mt-8">
             <GoogleSignInButton />
             <div className="my-6 flex items-center gap-3">
@@ -122,8 +150,12 @@ function Auth() {
 
           <Tabs defaultValue="signin">
             <TabsList className="w-full rounded-full">
-              <TabsTrigger value="signin" className="flex-1 rounded-full">Sign in</TabsTrigger>
-              <TabsTrigger value="signup" className="flex-1 rounded-full">Create account</TabsTrigger>
+              <TabsTrigger value="signin" className="flex-1 rounded-full">
+                Sign in
+              </TabsTrigger>
+              <TabsTrigger value="signup" className="flex-1 rounded-full">
+                Create account
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="signin" className="mt-8">
@@ -132,7 +164,11 @@ function Auth() {
                 Pick up where you left off with your trips.
               </p>
               <Form {...signIn}>
-                <form onSubmit={signIn.handleSubmit(() => submit("in"))} className="mt-6 space-y-4">
+                <form
+                  onSubmit={signIn.handleSubmit(() => submit("in"))}
+                  className="mt-6 space-y-4"
+                  autoComplete="on"
+                >
                   <FormField
                     control={signIn.control}
                     name="email"
@@ -140,7 +176,16 @@ function Auth() {
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="you@example.com" className="h-12 rounded-xl" {...field} />
+                          <Input
+                            type="email"
+                            inputMode="email"
+                            autoComplete="email"
+                            autoCapitalize="none"
+                            spellCheck={false}
+                            placeholder="you@example.com"
+                            className="h-12 rounded-xl text-base"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -153,13 +198,25 @@ function Auth() {
                       <FormItem>
                         <FormLabel>Password</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="••••••••" className="h-12 rounded-xl" {...field} />
+                          <Input
+                            type="password"
+                            autoComplete="current-password"
+                            placeholder="••••••••"
+                            className="h-12 rounded-xl text-base"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" variant="hero" size="lg" className="w-full rounded-full" disabled={loading}>
+                  <Button
+                    type="submit"
+                    variant="hero"
+                    size="lg"
+                    className="w-full rounded-full"
+                    disabled={loading}
+                  >
                     {loading ? <Loader2 className="size-4 animate-spin" /> : "Sign in"}
                   </Button>
                 </form>
@@ -169,10 +226,14 @@ function Auth() {
             <TabsContent value="signup" className="mt-8">
               <h1 className="text-2xl font-semibold">Create your account</h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                Book as a tourist, or list your business on the marketplace.
+                Traveller accounts only — book tours, stays and dining in one place.
               </p>
               <Form {...signUp}>
-                <form onSubmit={signUp.handleSubmit(() => submit("up"))} className="mt-6 space-y-4">
+                <form
+                  onSubmit={signUp.handleSubmit(() => submit("up"))}
+                  className="mt-6 space-y-4"
+                  autoComplete="on"
+                >
                   <FormField
                     control={signUp.control}
                     name="name"
@@ -180,7 +241,12 @@ function Auth() {
                       <FormItem>
                         <FormLabel>Full name</FormLabel>
                         <FormControl>
-                          <Input placeholder="Amara Devi" className="h-12 rounded-xl" {...field} />
+                          <Input
+                            autoComplete="name"
+                            placeholder="Amara Devi"
+                            className="h-12 rounded-xl text-base"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -193,7 +259,16 @@ function Auth() {
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="you@example.com" className="h-12 rounded-xl" {...field} />
+                          <Input
+                            type="email"
+                            inputMode="email"
+                            autoComplete="email"
+                            autoCapitalize="none"
+                            spellCheck={false}
+                            placeholder="you@example.com"
+                            className="h-12 rounded-xl text-base"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -206,34 +281,25 @@ function Auth() {
                       <FormItem>
                         <FormLabel>Password</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="At least 8 characters" className="h-12 rounded-xl" {...field} />
+                          <Input
+                            type="password"
+                            autoComplete="new-password"
+                            placeholder="At least 8 characters"
+                            className="h-12 rounded-xl text-base"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={signUp.control}
-                    name="role"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>I am a…</FormLabel>
-                        <Select value={field.value} onValueChange={field.onChange}>
-                          <FormControl>
-                            <SelectTrigger className="h-12 rounded-xl">
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="rounded-2xl">
-                            <SelectItem value="tourist">Tourist — I want to book</SelectItem>
-                            <SelectItem value="owner">Business owner — I want to list</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <Button type="submit" variant="hero" size="lg" className="w-full rounded-full" disabled={loading}>
+                  <Button
+                    type="submit"
+                    variant="hero"
+                    size="lg"
+                    className="w-full rounded-full"
+                    disabled={loading}
+                  >
                     {loading ? <Loader2 className="size-4 animate-spin" /> : "Create account"}
                   </Button>
                 </form>

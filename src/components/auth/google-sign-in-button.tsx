@@ -4,6 +4,8 @@ import { toast } from "sonner";
 
 import { getGoogleClientId } from "@/lib/google-auth.functions";
 import { decodeIdToken, signInUser } from "@/hooks/use-auth";
+import { oauthSignIn } from "@/lib/api";
+import { isMainAdminEmail } from "@/lib/constants";
 import { Skeleton } from "@/components/ui/skeleton";
 
 declare global {
@@ -32,7 +34,7 @@ function loadGsi(): Promise<void> {
   });
 }
 
-export function GoogleSignInButton({ role = "tourist" }: { role?: "tourist" | "owner" }) {
+export function GoogleSignInButton() {
   const ref = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
@@ -51,21 +53,37 @@ export function GoogleSignInButton({ role = "tourist" }: { role?: "tourist" | "o
         await loadGsi();
         if (cancelled || !ref.current) return;
 
+        const width = Math.min(360, Math.max(280, ref.current.parentElement?.clientWidth ?? 320));
+
         window.google.accounts.id.initialize({
           client_id: clientId,
-          callback: (response: { credential: string }) => {
+          callback: async (response: { credential: string }) => {
             try {
               const profile = decodeIdToken(response.credential);
-              signInUser({
+              if (!profile.email) {
+                toast.error("Google did not return an email address.");
+                return;
+              }
+              const account = await oauthSignIn({
                 name: profile.name ?? "Traveller",
-                email: profile.email ?? "",
+                email: profile.email,
                 picture: profile.picture,
-                role,
               });
-              toast.success(`Welcome, ${profile.name ?? "traveller"}`);
-              navigate({ to: "/dashboard" });
+              signInUser({
+                name: account.name,
+                email: account.email,
+                picture: account.picture,
+                role: account.role,
+              });
+              toast.success(`Welcome, ${account.name}`);
+              navigate({
+                to: account.role === "admin" ? "/admin" : "/dashboard",
+              });
+              if (isMainAdminEmail(account.email)) {
+                toast.message("Main admin access granted");
+              }
             } catch {
-              toast.error("Could not read your Google profile.");
+              toast.error("Could not complete Google sign-in.");
             }
           },
         });
@@ -75,7 +93,7 @@ export function GoogleSignInButton({ role = "tourist" }: { role?: "tourist" | "o
           size: "large",
           shape: "pill",
           text: "continue_with",
-          width: 360,
+          width,
           logo_alignment: "center",
         });
         setLoaded(true);
@@ -87,16 +105,16 @@ export function GoogleSignInButton({ role = "tourist" }: { role?: "tourist" | "o
     return () => {
       cancelled = true;
     };
-  }, [navigate, role]);
+  }, [navigate]);
 
   if (error) {
     return <p className="text-center text-xs text-muted-foreground">{error}</p>;
   }
 
   return (
-    <div className="flex justify-center">
-      {!loaded ? <Skeleton className="h-11 w-full rounded-full" /> : null}
-      <div ref={ref} className={loaded ? "" : "hidden"} />
+    <div className="flex w-full justify-center">
+      {!loaded ? <Skeleton className="h-11 w-full max-w-[360px] rounded-full" /> : null}
+      <div ref={ref} className={loaded ? "w-full max-w-[360px]" : "hidden"} />
     </div>
   );
 }

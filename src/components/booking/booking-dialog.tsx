@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { CalendarDays, CheckCircle2, Download, Loader2, QrCode } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,6 +28,7 @@ import { Separator } from "@/components/ui/separator";
 import { createBooking } from "@/lib/api";
 import type { Booking, Listing } from "@/lib/types";
 import { peso } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 const schema = z.object({
   name: z.string().trim().min(2, "Please enter your full name").max(80),
@@ -53,11 +54,29 @@ export function BookingDialog({
   total: number;
 }) {
   const [confirmed, setConfirmed] = useState<Booking | null>(null);
+  const { user } = useAuth();
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { name: "", email: "", phone: "", date: "", notes: "" },
+    defaultValues: {
+      name: user?.name ?? "",
+      email: user?.email ?? "",
+      phone: "",
+      date: "",
+      notes: "",
+    },
   });
+
+  useEffect(() => {
+    if (!user) return;
+    form.reset({
+      name: user.name,
+      email: user.email,
+      phone: form.getValues("phone"),
+      date: form.getValues("date"),
+      notes: form.getValues("notes"),
+    });
+  }, [user, form]);
 
   const mutation = useMutation({
     mutationFn: (values: FormValues) =>
@@ -67,11 +86,12 @@ export function BookingDialog({
         date: values.date,
         total,
         customer: values.name,
+        customerEmail: values.email,
       }),
     onSuccess: (booking) => {
       setConfirmed(booking);
       toast.success("Booking submitted", {
-        description: `Reference ${booking.reference} — awaiting partner confirmation.`,
+        description: `Reference ${booking.reference} — awaiting admin approval.`,
       });
     },
     onError: () => toast.error("Something went wrong. Please try again."),
@@ -135,7 +155,7 @@ export function BookingDialog({
                 <Row label="Guests" value={String(confirmed.guests)} />
                 <Row label="Total" value={peso(confirmed.total)} />
                 <Row label="Payment" value={confirmed.paid ? "Paid" : "Pay on arrival"} />
-                <Row label="Status" value="Pending partner approval" />
+                <Row label="Status" value="Pending admin approval" />
               </dl>
             </div>
 

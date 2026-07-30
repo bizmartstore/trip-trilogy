@@ -20,7 +20,7 @@ const columns = [
     title: "Company",
     links: [
       { label: "About ExploreHub", to: "/explore" as const },
-      { label: "Partner with us", to: "/auth" as const },
+      { label: "Create account", to: "/auth" as const },
       { label: "Careers", to: "/explore" as const },
       { label: "Press", to: "/explore" as const },
     ],

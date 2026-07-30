@@ -16,6 +16,9 @@ dist-ssr
 .nitro
 *.local
 
+# App store (local Node persistence)
+.data/
+
 # Wrangler / Cloudflare
 .wrangler/
 .dev.vars

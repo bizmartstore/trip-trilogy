@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, BadgeCheck, CalendarRange, Compass, ShieldCheck, Sparkles, UtensilsCrossed, Hotel, Tent } from "lucide-react";
 
 import { Hero } from "@/components/home/hero";
-import { StatsStrip } from "@/components/home/stats-strip";
+import { SearchStrip } from "@/components/home/search-strip";
 import { Testimonials } from "@/components/home/testimonials";
 import { DestinationGrid } from "@/components/home/destination-grid";
 import { ListingCard, ListingCardSkeleton } from "@/components/listings/listing-card";
@@ -54,8 +54,8 @@ function Home() {
     <>
       <Hero />
 
-      <div className="-mt-16 relative z-10">
-        <StatsStrip />
+      <div className="-mt-14 relative z-10">
+        <SearchStrip />
       </div>
 
       {/* Categories */}

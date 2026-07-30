@@ -4,7 +4,7 @@ export interface AuthUser {
   name: string;
   email: string;
   picture?: string;
-  role: "tourist" | "owner" | "admin";
+  role: "tourist" | "admin";
 }
 
 const KEY = "explorehub.user";
@@ -12,6 +12,7 @@ const EVENT = "explorehub-auth";
 
 function read(): AuthUser | null {
   try {
+    if (typeof localStorage === "undefined") return null;
     const raw = localStorage.getItem(KEY);
     return raw ? (JSON.parse(raw) as AuthUser) : null;
   } catch {
@@ -47,11 +48,15 @@ export function useAuth() {
 
   const signOut = useCallback(() => signOutUser(), []);
 
-  return { user, ready, signOut };
+  return { user, ready, signOut, isAdmin: user?.role === "admin" };
 }
 
 /** Decode the payload of a Google ID token (JWT) without verifying it. */
-export function decodeIdToken(token: string): { name?: string; email?: string; picture?: string } {
+export function decodeIdToken(token: string): {
+  name?: string;
+  email?: string;
+  picture?: string;
+} {
   const [, payload] = token.split(".");
   const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
   return JSON.parse(decodeURIComponent(escape(json)));

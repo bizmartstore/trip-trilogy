@@ -1,6 +1,6 @@
 export type ListingKind = "tour" | "stay" | "restaurant";
 
-export type UserRole = "visitor" | "tourist" | "owner" | "admin";
+export type UserRole = "visitor" | "tourist" | "admin";
 
 export type BookingStatus =
   | "pending"
@@ -66,6 +66,7 @@ export interface Listing {
   unit: string;
   rating: number;
   reviewCount: number;
+  /** Image URLs or compact data-URL text (renders as images in the browser). */
   images: string[];
   amenities: string[];
   tags: string[];
@@ -100,6 +101,27 @@ export interface Booking {
   status: BookingStatus;
   paid: boolean;
   customer: string;
+  customerEmail?: string;
+  createdAt?: string;
+}
+
+export interface Testimonial {
+  id: string;
+  author: string;
+  email: string;
+  role: string;
+  body: string;
+  rating: number;
+  createdAt: string;
+}
+
+export interface HubAccount {
+  email: string;
+  name: string;
+  passwordHash: string;
+  role: "tourist" | "admin";
+  picture?: string;
+  createdAt: string;
 }
 
 export interface SearchFilters {
@@ -111,4 +133,31 @@ export interface SearchFilters {
   minRating: number;
   tags: string[];
   sort: "popular" | "price-asc" | "price-desc" | "rating";
+}
+
+export interface ListingInput {
+  kind: ListingKind;
+  title: string;
+  tagline: string;
+  description: string;
+  destination: string;
+  country: string;
+  category: string;
+  price: number;
+  unit: string;
+  images: string[];
+  amenities: string[];
+  tags: string[];
+  businessName: string;
+  featured?: boolean;
+  status?: BusinessStatus;
+  durationDays?: number;
+  seatsLeft?: number;
+  discountPct?: number;
+  inclusions?: string[];
+  exclusions?: string[];
+  itinerary?: ItineraryDay[];
+  rooms?: RoomType[];
+  menu?: MenuItem[];
+  cancellationPolicy?: string;
 }

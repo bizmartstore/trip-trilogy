@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Area,
@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { Bell, CalendarCheck, Heart, Loader2, Plane, Wallet } from "lucide-react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 
 import { StatCard } from "@/components/shared/stat-card";
@@ -27,9 +28,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { fetchBookings, updateBookingStatus } from "@/lib/api";
+import { fetchBookings, fetchBookingsForEmail, updateBookingStatus } from "@/lib/api";
 import type { Booking } from "@/lib/types";
 import { peso } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
@@ -70,34 +72,61 @@ const notifications = [
 
 function Dashboard() {
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({ queryKey: ["bookings"], queryFn: fetchBookings });
+  const { user, ready } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (ready && !user) navigate({ to: "/auth" });
+  }, [ready, user, navigate]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["bookings", user?.email],
+    queryFn: () =>
+      user?.role === "admin"
+        ? fetchBookings()
+        : fetchBookingsForEmail(user!.email),
+    enabled: !!user,
+  });
 
   const cancel = useMutation({
     mutationFn: (id: string) => updateBookingStatus(id, "cancelled"),
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: ["bookings"] });
-      const prev = qc.getQueryData<Booking[]>(["bookings"]);
-      qc.setQueryData<Booking[]>(["bookings"], (old) =>
+      await qc.cancelQueries({ queryKey: ["bookings", user?.email] });
+      const prev = qc.getQueryData<Booking[]>(["bookings", user?.email]);
+      qc.setQueryData<Booking[]>(["bookings", user?.email], (old) =>
         old?.map((b) => (b.id === id ? { ...b, status: "cancelled" } : b)),
       );
       return { prev };
     },
     onError: (_e, _id, ctx) => {
-      qc.setQueryData(["bookings"], ctx?.prev);
+      qc.setQueryData(["bookings", user?.email], ctx?.prev);
       toast.error("Could not cancel that booking");
     },
-    onSuccess: () => toast.success("Booking cancelled", { description: "A refund confirmation is on its way." }),
+    onSuccess: () =>
+      toast.success("Booking cancelled", {
+        description: "A refund confirmation is on its way.",
+      }),
   });
 
   const upcoming = data?.filter((b) => ["pending", "approved", "confirmed"].includes(b.status)) ?? [];
   const totalSpend = data?.reduce((s, b) => s + (b.status === "cancelled" ? 0 : b.total), 0) ?? 0;
+
+  if (!ready || !user) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center pt-28">
+        <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="pt-28">
       <div className="container-x">
         <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
           <div className="min-w-0">
-            <h1 className="truncate text-3xl font-semibold sm:text-4xl">Welcome back, Amara</h1>
+            <h1 className="truncate text-3xl font-semibold sm:text-4xl">
+              Welcome back, {user.name.split(" ")[0]}
+            </h1>
             <p className="mt-2 text-muted-foreground">
               Everything you've booked across ExploreHub, in one timeline.
             </p>

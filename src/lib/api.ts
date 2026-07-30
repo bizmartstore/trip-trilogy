@@ -1,23 +1,36 @@
 /**
- * API layer.
- *
- * Every read/write in the app goes through these functions. They currently
- * resolve against the bundled catalog so the UI is fully interactive before a
- * backend is attached. Each function is a 1:1 match for the Supabase query it
- * will run once the project's Supabase instance is connected — swap the body,
- * keep the signature, and the whole app keeps working.
+ * Client API — all reads/writes go through Cloudflare Worker server functions.
+ * Images are text (data URLs). Cheap revision polling powers realtime UI updates.
  */
-import { allTags, demoBookings, destinations, listings } from "@/data/catalog";
+import { allTags } from "@/data/catalog";
+import {
+  addTestimonialFn,
+  createBookingFn,
+  createListingFn,
+  deleteListingFn,
+  deleteTestimonialFn,
+  fetchHubSnapshotFn,
+  fetchRevisionFn,
+  inviteAdminFn,
+  listAdminsFn,
+  oauthSignInFn,
+  registerFn,
+  removeAdminInviteFn,
+  searchListingsFn,
+  signInFn,
+  updateBookingStatusFn,
+  updateListingFn,
+} from "@/lib/hub.functions";
 import type {
   Booking,
   BookingStatus,
   Destination,
   Listing,
+  ListingInput,
   ListingKind,
   SearchFilters,
+  Testimonial,
 } from "@/lib/types";
-
-const latency = (ms = 260) => new Promise((r) => setTimeout(r, ms));
 
 export const defaultFilters: SearchFilters = {
   q: "",
@@ -30,89 +43,87 @@ export const defaultFilters: SearchFilters = {
   sort: "popular",
 };
 
+let cache: Awaited<ReturnType<typeof fetchHubSnapshotFn>> | null = null;
+
+async function snapshot(force = false) {
+  if (!force && cache) return cache;
+  cache = await fetchHubSnapshotFn();
+  return cache;
+}
+
+export function invalidateApiCache() {
+  cache = null;
+}
+
+export async function fetchRevision() {
+  return fetchRevisionFn();
+}
+
 export async function fetchDestinations(): Promise<Destination[]> {
-  await latency(120);
-  return destinations;
+  const s = await snapshot();
+  return s.destinations;
 }
 
 export async function fetchFeatured(): Promise<Listing[]> {
-  await latency(160);
-  return listings.filter((l) => l.featured && l.status === "approved");
+  const s = await snapshot();
+  return s.listings.filter((l) => l.featured && l.status === "approved");
 }
 
 export async function fetchTrending(kind?: ListingKind): Promise<Listing[]> {
-  await latency(160);
-  return listings
+  const s = await snapshot();
+  return s.listings
     .filter((l) => l.status === "approved" && (!kind || l.kind === kind))
     .sort((a, b) => b.reviewCount - a.reviewCount)
     .slice(0, 8);
 }
 
 export async function fetchRecent(): Promise<Listing[]> {
-  await latency(140);
-  return [...listings]
+  const s = await snapshot();
+  return [...s.listings]
     .filter((l) => l.status === "approved")
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     .slice(0, 6);
 }
 
 export async function searchListings(filters: SearchFilters): Promise<Listing[]> {
-  await latency(340);
-  const q = filters.q.trim().toLowerCase();
-
-  const result = listings.filter((l) => {
-    if (l.status !== "approved") return false;
-    if (filters.kind !== "all" && l.kind !== filters.kind) return false;
-    if (filters.destination !== "all" && l.destination !== filters.destination) return false;
-    if (l.price < filters.minPrice || l.price > filters.maxPrice) return false;
-    if (l.rating < filters.minRating) return false;
-    if (filters.tags.length && !filters.tags.every((t) => l.tags.includes(t))) return false;
-    if (q) {
-      const haystack = [
-        l.title,
-        l.tagline,
-        l.description,
-        l.destination,
-        l.country,
-        l.category,
-        l.businessName,
-        ...l.tags,
-        ...l.amenities,
-      ]
-        .join(" ")
-        .toLowerCase();
-      if (!haystack.includes(q)) return false;
-    }
-    return true;
-  });
-
-  switch (filters.sort) {
-    case "price-asc":
-      return result.sort((a, b) => a.price - b.price);
-    case "price-desc":
-      return result.sort((a, b) => b.price - a.price);
-    case "rating":
-      return result.sort((a, b) => b.rating - a.rating);
-    default:
-      return result.sort((a, b) => b.reviewCount - a.reviewCount);
-  }
+  return searchListingsFn({ data: filters });
 }
 
 export async function fetchListingBySlug(slug: string): Promise<Listing | null> {
-  await latency(200);
-  return listings.find((l) => l.slug === slug) ?? null;
+  const s = await snapshot(true);
+  return s.listings.find((l) => l.slug === slug) ?? null;
 }
 
 export async function fetchRelated(listing: Listing): Promise<Listing[]> {
-  await latency(120);
-  return listings
-    .filter((l) => l.id !== listing.id && (l.destination === listing.destination || l.kind === listing.kind))
+  const s = await snapshot();
+  return s.listings
+    .filter(
+      (l) =>
+        l.id !== listing.id &&
+        l.status === "approved" &&
+        (l.destination === listing.destination || l.kind === listing.kind),
+    )
     .slice(0, 3);
 }
 
+export async function fetchAllListingsAdmin(): Promise<Listing[]> {
+  const s = await snapshot(true);
+  return s.listings;
+}
+
 export async function fetchBookings(): Promise<Booking[]> {
-  await latency(220);
-  return demoBookings;
+  const s = await snapshot(true);
+  return s.bookings;
+}
+
+export async function fetchBookingsForEmail(email: string): Promise<Booking[]> {
+  const s = await snapshot(true);
+  const e = email.trim().toLowerCase();
+  return s.bookings.filter(
+    (b) =>
+      b.customerEmail?.toLowerCase() === e ||
+      b.customer.toLowerCase() === e.split("@")[0].toLowerCase(),
+  );
 }
 
 export interface CreateBookingInput {
@@ -121,37 +132,117 @@ export interface CreateBookingInput {
   date: string;
   total: number;
   customer: string;
+  customerEmail?: string;
 }
 
 export async function createBooking(input: CreateBookingInput): Promise<Booking> {
-  await latency(700);
-  const ref = `EXH-${Math.floor(1000 + Math.random() * 8999)}-${input.listing.destination
-    .slice(0, 3)
-    .toUpperCase()}`;
-  return {
-    id: crypto.randomUUID(),
-    reference: ref,
-    listingId: input.listing.id,
-    listingTitle: input.listing.title,
-    kind: input.listing.kind,
-    image: input.listing.images[0],
-    guests: input.guests,
-    date: input.date,
-    total: input.total,
-    status: "pending",
-    paid: false,
-    customer: input.customer,
-  };
+  const booking = await createBookingFn({
+    data: {
+      listingId: input.listing.id,
+      guests: input.guests,
+      date: input.date,
+      total: input.total,
+      customer: input.customer,
+      customerEmail: input.customerEmail,
+    },
+  });
+  invalidateApiCache();
+  return booking;
 }
 
-export async function updateBookingStatus(id: string, status: BookingStatus): Promise<{ id: string; status: BookingStatus }> {
-  await latency(420);
-  return { id, status };
+export async function updateBookingStatus(
+  id: string,
+  status: BookingStatus,
+): Promise<{ id: string; status: BookingStatus }> {
+  const result = await updateBookingStatusFn({ data: { id, status } });
+  invalidateApiCache();
+  return result;
 }
 
 export async function fetchPendingBusinesses(): Promise<Listing[]> {
-  await latency(200);
-  return listings.slice(0, 3).map((l) => ({ ...l, status: "pending" as const }));
+  const s = await snapshot(true);
+  return s.listings.filter((l) => l.status === "pending");
+}
+
+export async function createListing(actorEmail: string, listing: ListingInput) {
+  const created = await createListingFn({ data: { actorEmail, listing } });
+  invalidateApiCache();
+  return created;
+}
+
+export async function updateListing(
+  actorEmail: string,
+  id: string,
+  patch: Partial<ListingInput>,
+) {
+  const updated = await updateListingFn({ data: { actorEmail, id, patch } });
+  invalidateApiCache();
+  return updated;
+}
+
+export async function deleteListing(actorEmail: string, id: string) {
+  const result = await deleteListingFn({ data: { actorEmail, id } });
+  invalidateApiCache();
+  return result;
+}
+
+export async function fetchTestimonials(): Promise<Testimonial[]> {
+  const s = await snapshot();
+  return s.testimonials;
+}
+
+export async function submitTestimonial(input: {
+  author: string;
+  email: string;
+  role?: string;
+  body: string;
+  rating: number;
+}) {
+  const t = await addTestimonialFn({ data: input });
+  invalidateApiCache();
+  return t;
+}
+
+export async function removeTestimonial(actorEmail: string, id: string) {
+  const result = await deleteTestimonialFn({ data: { actorEmail, id } });
+  invalidateApiCache();
+  return result;
+}
+
+export async function registerAccount(input: {
+  name: string;
+  email: string;
+  password: string;
+}) {
+  return registerFn({ data: input });
+}
+
+export async function signInAccount(input: { email: string; password: string }) {
+  return signInFn({ data: input });
+}
+
+export async function oauthSignIn(input: {
+  name: string;
+  email: string;
+  picture?: string;
+}) {
+  return oauthSignInFn({ data: input });
+}
+
+export async function inviteAdmin(actorEmail: string, inviteEmail: string) {
+  const result = await inviteAdminFn({ data: { actorEmail, inviteEmail } });
+  invalidateApiCache();
+  return result;
+}
+
+export async function removeAdminInvite(actorEmail: string, inviteEmail: string) {
+  const result = await removeAdminInviteFn({ data: { actorEmail, inviteEmail } });
+  invalidateApiCache();
+  return result;
+}
+
+export async function listAdmins(actorEmail: string) {
+  return listAdminsFn({ data: { actorEmail } });
 }
 
 export function tagOptions() {
@@ -159,5 +250,8 @@ export function tagOptions() {
 }
 
 export function destinationOptions() {
-  return Array.from(new Set(listings.map((l) => l.destination))).sort();
+  if (cache?.listings?.length) {
+    return Array.from(new Set(cache.listings.map((l) => l.destination))).sort();
+  }
+  return ["El Nido", "Coron", "Puerto Princesa", "Port Barton", "San Vicente", "Balabac"];
 }
