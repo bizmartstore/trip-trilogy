@@ -24,6 +24,7 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 const nav = [
   { to: "/explore", label: "Explore", search: { kind: "all" as const } },
@@ -35,6 +36,7 @@ const nav = [
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
+  const { user, signOut } = useAuth();
   const { theme, toggle } = useTheme();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const overHero = pathname === "/" && !scrolled;
@@ -148,7 +150,7 @@ export function Navbar() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52 rounded-2xl">
-                <DropdownMenuLabel>Account</DropdownMenuLabel>
+                <DropdownMenuLabel className="truncate">{user ? user.name : "Account"}</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link to="/dashboard">
@@ -161,15 +163,25 @@ export function Navbar() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link to="/auth">Sign in</Link>
-                </DropdownMenuItem>
+                {user ? (
+                  <DropdownMenuItem onSelect={() => signOut()}>Sign out</DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem asChild>
+                    <Link to="/auth">Sign in</Link>
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button asChild variant={overHero ? "sand" : "default"} className="hidden rounded-full md:inline-flex">
-              <Link to="/auth">Sign in</Link>
-            </Button>
+            {user ? (
+              <Button asChild variant={overHero ? "sand" : "default"} className="hidden rounded-full md:inline-flex">
+                <Link to="/dashboard">My trips</Link>
+              </Button>
+            ) : (
+              <Button asChild variant={overHero ? "sand" : "default"} className="hidden rounded-full md:inline-flex">
+                <Link to="/auth">Sign in</Link>
+              </Button>
+            )}
 
             <Sheet open={open} onOpenChange={setOpen}>
               <SheetTrigger asChild>
@@ -204,11 +216,23 @@ export function Navbar() {
                   <Link to="/admin" onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-medium hover:bg-muted">
                     Admin console
                   </Link>
-                  <Button asChild className="mt-4 rounded-full">
-                    <Link to="/auth" onClick={() => setOpen(false)}>
-                      Sign in
-                    </Link>
-                  </Button>
+                  {user ? (
+                    <Button
+                      className="mt-4 rounded-full"
+                      onClick={() => {
+                        signOut();
+                        setOpen(false);
+                      }}
+                    >
+                      Sign out
+                    </Button>
+                  ) : (
+                    <Button asChild className="mt-4 rounded-full">
+                      <Link to="/auth" onClick={() => setOpen(false)}>
+                        Sign in
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               </SheetContent>
             </Sheet>
