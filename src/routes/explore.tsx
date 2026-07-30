@@ -59,7 +59,7 @@ function Explore() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: "/explore" });
 
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 50000]);
   const [minRating, setMinRating] = useState(0);
   const [tags, setTags] = useState<string[]>([]);
   const [sort, setSort] = useState<SearchFilters["sort"]>("popular");
@@ -88,7 +88,7 @@ function Explore() {
     setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
 
   const reset = () => {
-    setPriceRange([0, 1000]);
+    setPriceRange([0, 50000]);
     setMinRating(0);
     setTags([]);
     setSort("popular");
@@ -96,7 +96,7 @@ function Explore() {
   };
 
   const activeCount =
-    tags.length + (minRating > 0 ? 1 : 0) + (priceRange[0] > 0 || priceRange[1] < 1000 ? 1 : 0);
+    tags.length + (minRating > 0 ? 1 : 0) + (priceRange[0] > 0 || priceRange[1] < 50000 ? 1 : 0);
 
   const FilterPanel = (
     <div className="space-y-8">
@@ -124,14 +124,14 @@ function Explore() {
         <div className="flex items-center justify-between">
           <Label className="text-sm font-semibold">Price range</Label>
           <span className="text-sm text-muted-foreground">
-            ${priceRange[0]} – ${priceRange[1]}
+            {peso(priceRange[0])} – {peso(priceRange[1])}
           </span>
         </div>
         <Slider
           className="mt-5"
           value={priceRange}
           min={0}
-          max={1000}
+          max={50000}
           step={10}
           onValueChange={(v) => setPriceRange([v[0], v[1]] as [number, number])}
         />

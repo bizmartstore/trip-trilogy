@@ -132,7 +132,7 @@ export function BookingDialog({
                 <Row label="Listing" value={confirmed.listingTitle} />
                 <Row label="Date" value={confirmed.date} />
                 <Row label="Guests" value={String(confirmed.guests)} />
-                <Row label="Total" value={`$${confirmed.total}`} />
+                <Row label="Total" value={peso(confirmed.total)} />
                 <Row label="Payment" value={confirmed.paid ? "Paid" : "Pay on arrival"} />
                 <Row label="Status" value="Pending partner approval" />
               </dl>
@@ -162,7 +162,7 @@ export function BookingDialog({
             <DialogHeader>
               <DialogTitle className="font-display text-xl">Complete your booking</DialogTitle>
               <DialogDescription>
-                {listing.title} · {guests} {guests === 1 ? "guest" : "guests"} · ${total} total
+                {listing.title} · {guests} {guests === 1 ? "guest" : "guests"} · {peso(total)} total
               </DialogDescription>
             </DialogHeader>
 
@@ -252,7 +252,7 @@ export function BookingDialog({
                     </>
                   ) : (
                     <>
-                      <CalendarDays className="size-4" /> Confirm booking · ${total}
+                      <CalendarDays className="size-4" /> Confirm booking · {peso(total)}
                     </>
                   )}
                 </Button>

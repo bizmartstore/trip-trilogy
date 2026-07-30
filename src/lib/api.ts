@@ -24,7 +24,7 @@ export const defaultFilters: SearchFilters = {
   kind: "all",
   destination: "all",
   minPrice: 0,
-  maxPrice: 1000,
+  maxPrice: 50000,
   minRating: 0,
   tags: [],
   sort: "popular",

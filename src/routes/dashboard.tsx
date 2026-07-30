@@ -109,7 +109,7 @@ function Dashboard() {
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard icon={Plane} label="Upcoming trips" value={String(upcoming.length)} delta="+2" index={0} />
           <StatCard icon={CalendarCheck} label="Total bookings" value={String(data?.length ?? 0)} delta="+18%" index={1} />
-          <StatCard icon={Wallet} label="Lifetime spend" value={`$${totalSpend.toLocaleString()}`} delta="+12%" index={2} />
+          <StatCard icon={Wallet} label="Lifetime spend" value={peso(totalSpend)} delta="+12%" index={2} />
           <StatCard icon={Heart} label="Saved listings" value="14" index={3} />
         </div>
 
@@ -279,7 +279,7 @@ function BookingTable({
               <TableCell className="font-mono text-xs">{b.reference}</TableCell>
               <TableCell className="whitespace-nowrap">{b.date}</TableCell>
               <TableCell>{b.guests}</TableCell>
-              <TableCell>${b.total.toLocaleString()}</TableCell>
+              <TableCell>{peso(b.total)}</TableCell>
               <TableCell><StatusBadge status={b.status} /></TableCell>
               <TableCell className="text-right">
                 {["pending", "approved", "confirmed"].includes(b.status) ? (

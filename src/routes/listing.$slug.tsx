@@ -201,7 +201,7 @@ function ListingDetail() {
                         <div key={r.name} className="rounded-2xl border border-border bg-card p-5">
                           <div className="flex items-start justify-between gap-3">
                             <h3 className="font-display font-semibold">{r.name}</h3>
-                            <span className="shrink-0 font-semibold">${r.price}</span>
+                            <span className="shrink-0 font-semibold">{peso(r.price)}</span>
                           </div>
                           <p className="mt-1.5 text-sm text-muted-foreground">
                             {r.beds} · sleeps {r.capacity}
@@ -232,7 +232,7 @@ function ListingDetail() {
                               {m.category}
                             </p>
                           </div>
-                          <span className="shrink-0 font-semibold">${m.price}</span>
+                          <span className="shrink-0 font-semibold">{peso(m.price)}</span>
                         </div>
                       ))}
                     </div>
@@ -349,9 +349,9 @@ function ListingDetail() {
             >
               <div className="flex items-end gap-2">
                 {listing.discountPct ? (
-                  <span className="text-base text-muted-foreground line-through">${listing.price}</span>
+                  <span className="text-base text-muted-foreground line-through">{peso(listing.price)}</span>
                 ) : null}
-                <span className="font-display text-3xl font-semibold">${unitPrice}</span>
+                <span className="font-display text-3xl font-semibold">{peso(unitPrice)}</span>
                 <span className="pb-1 text-sm text-muted-foreground">{listing.unit}</span>
               </div>
 
@@ -395,9 +395,9 @@ function ListingDetail() {
               <dl className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">
-                    ${unitPrice} × {guests}
+                    {peso(unitPrice)} × {guests}
                   </dt>
-                  <dd>${unitPrice * guests}</dd>
+                  <dd>{peso(unitPrice * guests)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Service fee</dt>
@@ -405,7 +405,7 @@ function ListingDetail() {
                 </div>
                 <div className="flex justify-between border-t border-border pt-3 text-base font-semibold">
                   <dt>Total</dt>
-                  <dd>${total}</dd>
+                  <dd>{peso(total)}</dd>
                 </div>
               </dl>
 

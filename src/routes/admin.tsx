@@ -105,7 +105,7 @@ function Admin() {
         </div>
 
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard icon={DollarSign} label="Revenue this month" value="$91.3k" delta="+22%" index={0} />
+          <StatCard icon={DollarSign} label="Revenue this month" value="₱5.1M" delta="+22%" index={0} />
           <StatCard icon={Users} label="Active tourists" value="12,480" delta="+8.4%" index={1} />
           <StatCard icon={Building2} label="Partner businesses" value="642" delta="+31" index={2} />
           <StatCard icon={CheckCircle2} label="Pending approvals" value={String(pending.data?.length ?? 0)} delta="-4" index={3} />
@@ -242,7 +242,7 @@ function Admin() {
                       <TableCell className="font-mono text-xs">{b.reference}</TableCell>
                       <TableCell className="whitespace-nowrap">{b.customer}</TableCell>
                       <TableCell className="max-w-[220px] truncate">{b.listingTitle}</TableCell>
-                      <TableCell>${b.total.toLocaleString()}</TableCell>
+                      <TableCell>{peso(b.total)}</TableCell>
                       <TableCell><StatusBadge status={b.status} /></TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">
