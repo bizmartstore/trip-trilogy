@@ -128,8 +128,32 @@ function RootShell({ children }: { children: ReactNode }) {
   );
 }
 
+function useNoZoom() {
+  useEffect(() => {
+    // iOS Safari ignores user-scalable=no, so block pinch + double-tap zoom.
+    const preventGesture = (e: Event) => e.preventDefault();
+    let lastTouch = 0;
+    const preventDoubleTap = (e: TouchEvent) => {
+      const now = Date.now();
+      if (now - lastTouch <= 300) e.preventDefault();
+      lastTouch = now;
+    };
+    document.addEventListener("gesturestart", preventGesture);
+    document.addEventListener("gesturechange", preventGesture);
+    document.addEventListener("gestureend", preventGesture);
+    document.addEventListener("touchend", preventDoubleTap, { passive: false });
+    return () => {
+      document.removeEventListener("gesturestart", preventGesture);
+      document.removeEventListener("gesturechange", preventGesture);
+      document.removeEventListener("gestureend", preventGesture);
+      document.removeEventListener("touchend", preventDoubleTap);
+    };
+  }, []);
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  useNoZoom();
 
   return (
     <QueryClientProvider client={queryClient}>
