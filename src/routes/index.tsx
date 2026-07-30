@@ -24,7 +24,7 @@ export const Route = createFileRoute("/")({
       {
         property: "og:description",
         content:
-          "Discover verified tours, hand-picked hotels and standout restaurants across Palawan, all bookable in one place.",
+          "Discover verified tours, hand-picked hotels and standout restaurants across Palawan. Plan, book and manage every reservation from one premium travel marketplace.",
       },
     ],
   }),
