@@ -88,7 +88,7 @@ function Auth() {
             Every great trip starts with a single search.
           </h2>
           <p className="mt-4 max-w-md text-white/75">
-            Join 12,000+ travellers booking tours, stays and tables across 40 countries.
+            Join 12,000+ travellers booking tours, stays and tables across Palawan.
           </p>
         </div>
       </div>

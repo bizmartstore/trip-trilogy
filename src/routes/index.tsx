@@ -18,13 +18,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Discover verified tours, hand-picked hotels and standout restaurants worldwide. Plan, book and manage every reservation from one premium travel marketplace.",
+          "Discover verified tours, hand-picked hotels and standout restaurants across Palawan. Plan, book and manage every reservation from one premium travel marketplace.",
       },
       { property: "og:title", content: "ExploreHub — Tours, Stays & Dining in One Marketplace" },
       {
         property: "og:description",
         content:
-          "Discover verified tours, hand-picked hotels and standout restaurants worldwide, all bookable in one place.",
+          "Discover verified tours, hand-picked hotels and standout restaurants across Palawan, all bookable in one place.",
       },
     ],
   }),

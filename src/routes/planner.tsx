@@ -45,7 +45,7 @@ function Planner() {
   const [destination, setDestination] = useState(destinationOptions()[0]);
   const [nights, setNights] = useState(4);
   const [travellers, setTravellers] = useState(2);
-  const [budget, setBudget] = useState(2500);
+  const [budget, setBudget] = useState(60000);
   const [interests, setInterests] = useState<string[]>(["beach", "food"]);
   const [plan, setPlan] = useState<Listing[] | null>(null);
   const [building, setBuilding] = useState(false);
