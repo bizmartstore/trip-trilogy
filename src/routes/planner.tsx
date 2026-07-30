@@ -20,6 +20,7 @@ import {
 import { listings } from "@/data/catalog";
 import { destinationOptions, tagOptions } from "@/lib/api";
 import type { Listing } from "@/lib/types";
+import { peso } from "@/lib/utils";
 
 export const Route = createFileRoute("/planner")({
   head: () => ({
@@ -44,7 +45,7 @@ function Planner() {
   const [destination, setDestination] = useState(destinationOptions()[0]);
   const [nights, setNights] = useState(4);
   const [travellers, setTravellers] = useState(2);
-  const [budget, setBudget] = useState(2500);
+  const [budget, setBudget] = useState(60000);
   const [interests, setInterests] = useState<string[]>(["beach", "food"]);
   const [plan, setPlan] = useState<Listing[] | null>(null);
   const [building, setBuilding] = useState(false);
@@ -156,14 +157,14 @@ function Planner() {
                   <Label className="flex items-center gap-2 text-sm font-semibold">
                     <Wallet className="size-4" /> Budget
                   </Label>
-                  <span className="text-sm text-muted-foreground">${budget}</span>
+                  <span className="text-sm text-muted-foreground">{peso(budget)}</span>
                 </div>
                 <Slider
                   className="mt-5"
                   value={[budget]}
                   min={300}
-                  max={10000}
-                  step={100}
+                  max={200000}
+                  step={500}
                   onValueChange={(v) => setBudget(v[0])}
                 />
               </div>
@@ -243,7 +244,7 @@ function Planner() {
                   <div className="min-w-0">
                     <p className="text-sm text-muted-foreground">Estimated trip cost</p>
                     <p className="font-display text-3xl font-semibold">
-                      ${Math.round(estimate).toLocaleString()}
+                      {peso(Math.round(estimate))}
                     </p>
                     <Badge
                       className={`mt-2 rounded-full border-0 ${
@@ -251,8 +252,8 @@ function Planner() {
                       }`}
                     >
                       {withinBudget
-                        ? `$${Math.round(budget - estimate).toLocaleString()} under budget`
-                        : `$${Math.round(estimate - budget).toLocaleString()} over budget`}
+                        ? `${peso(Math.round(budget - estimate))} under budget`
+                        : `${peso(Math.round(estimate - budget))} over budget`}
                     </Badge>
                   </div>
                   <Button variant="outline" className="shrink-0 rounded-full" onClick={build}>

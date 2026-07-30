@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Listing } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, peso } from "@/lib/utils";
 
 const kindLabel: Record<Listing["kind"], string> = {
   tour: "Tour",
@@ -108,9 +108,9 @@ export function ListingCard({ listing, index = 0 }: { listing: Listing; index?: 
         <div className="flex items-end justify-between border-t border-border pt-3">
           <div>
             {listing.discountPct ? (
-              <span className="mr-2 text-sm text-muted-foreground line-through">${listing.price}</span>
+              <span className="mr-2 text-sm text-muted-foreground line-through">{peso(listing.price)}</span>
             ) : null}
-            <span className="font-display text-xl font-semibold">${discounted}</span>
+            <span className="font-display text-xl font-semibold">{peso(discounted)}</span>
             <span className="ml-1 text-xs text-muted-foreground">{listing.unit}</span>
           </div>
           <Link

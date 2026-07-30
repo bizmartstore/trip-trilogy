@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { createBooking } from "@/lib/api";
 import type { Booking, Listing } from "@/lib/types";
+import { peso } from "@/lib/utils";
 
 const schema = z.object({
   name: z.string().trim().min(2, "Please enter your full name").max(80),
@@ -132,7 +133,7 @@ export function BookingDialog({
                 <Row label="Listing" value={confirmed.listingTitle} />
                 <Row label="Date" value={confirmed.date} />
                 <Row label="Guests" value={String(confirmed.guests)} />
-                <Row label="Total" value={`$${confirmed.total}`} />
+                <Row label="Total" value={peso(confirmed.total)} />
                 <Row label="Payment" value={confirmed.paid ? "Paid" : "Pay on arrival"} />
                 <Row label="Status" value="Pending partner approval" />
               </dl>
@@ -162,7 +163,7 @@ export function BookingDialog({
             <DialogHeader>
               <DialogTitle className="font-display text-xl">Complete your booking</DialogTitle>
               <DialogDescription>
-                {listing.title} · {guests} {guests === 1 ? "guest" : "guests"} · ${total} total
+                {listing.title} · {guests} {guests === 1 ? "guest" : "guests"} · {peso(total)} total
               </DialogDescription>
             </DialogHeader>
 
@@ -252,7 +253,7 @@ export function BookingDialog({
                     </>
                   ) : (
                     <>
-                      <CalendarDays className="size-4" /> Confirm booking · ${total}
+                      <CalendarDays className="size-4" /> Confirm booking · {peso(total)}
                     </>
                   )}
                 </Button>

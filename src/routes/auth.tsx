@@ -26,6 +26,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import heroImage from "@/assets/hero.jpg";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { signInUser } from "@/hooks/use-auth";
 
 const signInSchema = z.object({
   email: z.string().trim().email("Enter a valid email").max(160),
@@ -71,9 +73,13 @@ function Auth() {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      toast.success(mode === "in" ? "Welcome back" : "Account created", {
-        description: "Connect your Supabase project to persist real accounts.",
+      const values = mode === "in" ? signIn.getValues() : signUp.getValues();
+      signInUser({
+        name: mode === "up" ? signUp.getValues("name") : values.email.split("@")[0],
+        email: values.email,
+        role: mode === "up" ? signUp.getValues("role") : "tourist",
       });
+      toast.success(mode === "in" ? "Welcome back" : "Account created");
       navigate({ to: "/dashboard" });
     }, 800);
   };
@@ -88,7 +94,7 @@ function Auth() {
             Every great trip starts with a single search.
           </h2>
           <p className="mt-4 max-w-md text-white/75">
-            Join 12,000+ travellers booking tours, stays and tables across 40 countries.
+            Join 12,000+ travellers booking tours, stays and tables across Palawan.
           </p>
         </div>
       </div>
@@ -104,7 +110,17 @@ function Auth() {
             <Compass className="size-6 text-primary" /> ExploreHub
           </span>
 
-          <Tabs defaultValue="signin" className="mt-8">
+
+          <div className="mt-8">
+            <GoogleSignInButton />
+            <div className="my-6 flex items-center gap-3">
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-xs uppercase tracking-widest text-muted-foreground">or</span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+          </div>
+
+          <Tabs defaultValue="signin">
             <TabsList className="w-full rounded-full">
               <TabsTrigger value="signin" className="flex-1 rounded-full">Sign in</TabsTrigger>
               <TabsTrigger value="signup" className="flex-1 rounded-full">Create account</TabsTrigger>

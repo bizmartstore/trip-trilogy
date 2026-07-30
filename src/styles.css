@@ -363,3 +363,37 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ------------------------------------------------------------------
+   Hide the Lovable badge globally, in every published/preview context.
+------------------------------------------------------------------ */
+#lovable-badge,
+#lovable-badge-container,
+a[href*="lovable.dev"][target="_blank"],
+a[href*="lovable.app/?utm"],
+[id^="lovable-"][id*="badge"],
+[class*="lovable-badge"],
+[data-lovable-badge],
+gpt-engineer-badge,
+lovable-badge {
+  display: none !important;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+/* ------------------------------------------------------------------
+   Lock mobile pinch/double-tap zoom.
+------------------------------------------------------------------ */
+html {
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  touch-action: pan-x pan-y;
+  overscroll-behavior-y: none;
+}
