@@ -301,7 +301,6 @@ export const listings: Listing[] = [
       "A family-run lodge minutes from the Underground River pier, serving a Palaweño breakfast on the veranda. Hardwood cabins, outdoor showers and a garden loud with hornbills at dawn.",
     destination: "Puerto Princesa",
     country: "Palawan",
-    country_note: undefined,
     category: "Lodge",
     price: 4600,
     currency: "PHP",
