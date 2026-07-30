@@ -73,9 +73,13 @@ function Auth() {
     setLoading(true);
     setTimeout(() => {
       setLoading(false);
-      toast.success(mode === "in" ? "Welcome back" : "Account created", {
-        description: "Connect your Supabase project to persist real accounts.",
+      const values = mode === "in" ? signIn.getValues() : signUp.getValues();
+      signInUser({
+        name: mode === "up" ? signUp.getValues("name") : values.email.split("@")[0],
+        email: values.email,
+        role: mode === "up" ? signUp.getValues("role") : "tourist",
       });
+      toast.success(mode === "in" ? "Welcome back" : "Account created");
       navigate({ to: "/dashboard" });
     }, 800);
   };
