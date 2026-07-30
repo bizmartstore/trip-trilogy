@@ -27,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { createBooking } from "@/lib/api";
 import type { Booking, Listing } from "@/lib/types";
+import { peso } from "@/lib/utils";
 
 const schema = z.object({
   name: z.string().trim().min(2, "Please enter your full name").max(80),

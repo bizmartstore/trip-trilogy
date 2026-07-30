@@ -20,6 +20,7 @@ import {
 import { listings } from "@/data/catalog";
 import { destinationOptions, tagOptions } from "@/lib/api";
 import type { Listing } from "@/lib/types";
+import { peso } from "@/lib/utils";
 
 export const Route = createFileRoute("/planner")({
   head: () => ({
@@ -163,7 +164,7 @@ function Planner() {
                   value={[budget]}
                   min={300}
                   max={200000}
-                  step={100}
+                  step={500}
                   onValueChange={(v) => setBudget(v[0])}
                 />
               </div>

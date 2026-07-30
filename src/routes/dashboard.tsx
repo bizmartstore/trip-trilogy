@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { fetchBookings, updateBookingStatus } from "@/lib/api";
 import type { Booking } from "@/lib/types";
+import { peso } from "@/lib/utils";
 
 export const Route = createFileRoute("/dashboard")({
   head: () => ({

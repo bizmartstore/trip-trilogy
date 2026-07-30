@@ -29,6 +29,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchListingBySlug, fetchRelated } from "@/lib/api";
 import type { Listing } from "@/lib/types";
+import { peso } from "@/lib/utils";
 
 export const Route = createFileRoute("/listing/$slug")({
   loader: async ({ params }) => {

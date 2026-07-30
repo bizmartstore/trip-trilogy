@@ -22,6 +22,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { defaultFilters, destinationOptions, searchListings, tagOptions } from "@/lib/api";
 import type { ListingKind, SearchFilters } from "@/lib/types";
+import { peso } from "@/lib/utils";
 
 type ExploreSearch = {
   q?: string;
@@ -132,7 +133,7 @@ function Explore() {
           value={priceRange}
           min={0}
           max={50000}
-          step={10}
+          step={500}
           onValueChange={(v) => setPriceRange([v[0], v[1]] as [number, number])}
         />
       </div>
