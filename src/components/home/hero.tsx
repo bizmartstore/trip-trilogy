@@ -51,11 +51,11 @@ export function Hero() {
           <h1 className="mt-6 text-balance text-5xl font-semibold leading-[1.05] text-deep-foreground sm:text-6xl lg:text-7xl">
             The whole trip.
             <br />
-            <span className="text-gradient-gold">One marketplace.</span>
+            <span className="text-gradient-gold">All of Palawan.</span>
           </h1>
 
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-deep-foreground/85">
-            Discover verified tours, hand-picked stays and tables worth flying for — then plan,
+            Discover verified Palawan tours, hand-picked island stays and tables worth flying for — then plan,
             book and manage every reservation from a single dashboard.
           </p>
 

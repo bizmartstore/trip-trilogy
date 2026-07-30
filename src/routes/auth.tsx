@@ -26,6 +26,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import heroImage from "@/assets/hero.jpg";
+import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
+import { signInUser } from "@/hooks/use-auth";
 
 const signInSchema = z.object({
   email: z.string().trim().email("Enter a valid email").max(160),
@@ -104,7 +106,17 @@ function Auth() {
             <Compass className="size-6 text-primary" /> ExploreHub
           </span>
 
-          <Tabs defaultValue="signin" className="mt-8">
+
+          <div className="mt-8">
+            <GoogleSignInButton />
+            <div className="my-6 flex items-center gap-3">
+              <span className="h-px flex-1 bg-border" />
+              <span className="text-xs uppercase tracking-widest text-muted-foreground">or</span>
+              <span className="h-px flex-1 bg-border" />
+            </div>
+          </div>
+
+          <Tabs defaultValue="signin">
             <TabsList className="w-full rounded-full">
               <TabsTrigger value="signin" className="flex-1 rounded-full">Sign in</TabsTrigger>
               <TabsTrigger value="signup" className="flex-1 rounded-full">Create account</TabsTrigger>
