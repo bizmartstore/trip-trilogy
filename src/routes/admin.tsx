@@ -13,6 +13,8 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { ContactSettings } from "@/components/admin/contact-settings";
+import { RevenuePanel } from "@/components/admin/revenue-panel";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -332,6 +334,12 @@ function Admin() {
               <TabsTrigger value="content" className="rounded-full">
                 Tours · Stays · Dining
               </TabsTrigger>
+              <TabsTrigger value="revenue" className="rounded-full">
+                Revenue
+              </TabsTrigger>
+              <TabsTrigger value="contact" className="rounded-full">
+                Contact details
+              </TabsTrigger>
               <TabsTrigger value="admins" className="rounded-full">
                 Admins
               </TabsTrigger>
@@ -471,6 +479,14 @@ function Admin() {
                       </div>
                     </div>
                   ))}
+            </TabsContent>
+
+            <TabsContent value="revenue" className="mt-6">
+              <RevenuePanel bookings={bookings.data ?? []} />
+            </TabsContent>
+
+            <TabsContent value="contact" className="mt-6">
+              {user ? <ContactSettings actorEmail={user.email} /> : null}
             </TabsContent>
 
             <TabsContent value="admins" className="mt-6 space-y-6">
