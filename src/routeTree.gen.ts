@@ -16,6 +16,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as PlannerRouteImport } from './routes/planner'
 import { Route as ListingSlugRouteImport } from './routes/listing.$slug'
+import { Route as ApiPublicKeepaliveRouteImport } from './routes/api/public/keepalive'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -52,6 +53,11 @@ const ListingSlugRoute = ListingSlugRouteImport.update({
   path: '/listing/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicKeepaliveRoute = ApiPublicKeepaliveRouteImport.update({
+  id: '/api/public/keepalive',
+  path: '/api/public/keepalive',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -61,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/explore': typeof ExploreRoute
   '/planner': typeof PlannerRoute
   '/listing/$slug': typeof ListingSlugRoute
+  '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -70,6 +77,7 @@ export interface FileRoutesByTo {
   '/explore': typeof ExploreRoute
   '/planner': typeof PlannerRoute
   '/listing/$slug': typeof ListingSlugRoute
+  '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -80,6 +88,7 @@ export interface FileRoutesById {
   '/explore': typeof ExploreRoute
   '/planner': typeof PlannerRoute
   '/listing/$slug': typeof ListingSlugRoute
+  '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -91,6 +100,7 @@ export interface FileRouteTypes {
     | '/explore'
     | '/planner'
     | '/listing/$slug'
+    | '/api/public/keepalive'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -100,6 +110,7 @@ export interface FileRouteTypes {
     | '/explore'
     | '/planner'
     | '/listing/$slug'
+    | '/api/public/keepalive'
   id:
     | '__root__'
     | '/'
@@ -109,6 +120,7 @@ export interface FileRouteTypes {
     | '/explore'
     | '/planner'
     | '/listing/$slug'
+    | '/api/public/keepalive'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -119,6 +131,7 @@ export interface RootRouteChildren {
   ExploreRoute: typeof ExploreRoute
   PlannerRoute: typeof PlannerRoute
   ListingSlugRoute: typeof ListingSlugRoute
+  ApiPublicKeepaliveRoute: typeof ApiPublicKeepaliveRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -172,6 +185,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ListingSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/keepalive': {
+      id: '/api/public/keepalive'
+      path: '/api/public/keepalive'
+      fullPath: '/api/public/keepalive'
+      preLoaderRoute: typeof ApiPublicKeepaliveRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -183,17 +203,8 @@ const rootRouteChildren: RootRouteChildren = {
   ExploreRoute: ExploreRoute,
   PlannerRoute: PlannerRoute,
   ListingSlugRoute: ListingSlugRoute,
+  ApiPublicKeepaliveRoute: ApiPublicKeepaliveRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
