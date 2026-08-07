@@ -396,7 +396,9 @@ export async function setBookingStatus(id: string, status: BookingStatus) {
   if (!booking) throw new Error("Booking not found");
   booking.status = status;
   bump(state);
+  await mirrorBooking(booking);
   return { id, status };
+
 }
 
 export async function createListingRecord(actorEmail: string, input: ListingInput) {
