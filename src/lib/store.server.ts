@@ -1,15 +1,24 @@
 /**
  * Compact app store for Cloudflare Worker / Node.
- * Images are stored as text (data URLs), not blob storage — keeps quota low.
- * Revision bumps on every mutation so clients can poll cheaply for realtime updates.
+ * Durable state lives in the project's own Supabase instance (`hub_state` document),
+ * with every booking mirrored into a real `bookings` table for admin visibility.
+ * Revision bumps on every mutation so clients poll cheaply for realtime updates.
  */
 import { destinations as seedDestinations, demoBookings, listings as seedListings } from "@/data/catalog";
 import { isMainAdminEmail, normalizeEmail } from "@/lib/constants";
+import {
+  readHubDocument,
+  readHubRevision,
+  supabaseConfigured,
+  upsertBookingRow,
+  writeHubDocument,
+} from "@/lib/supabase-rest.server";
 import type {
   Booking,
   BookingStatus,
   Destination,
   HubAccount,
+  HubSettings,
   Listing,
   ListingInput,
   Testimonial,
@@ -23,6 +32,7 @@ export interface HubState {
   accounts: HubAccount[];
   adminInvites: string[];
   testimonials: Testimonial[];
+  settings: HubSettings;
 }
 
 const GLOBAL_KEY = "__explorehub_store_v1__";
@@ -30,6 +40,15 @@ const GLOBAL_KEY = "__explorehub_store_v1__";
 type GlobalStore = typeof globalThis & {
   [GLOBAL_KEY]?: HubState;
   __explorehub_persist_timer?: ReturnType<typeof setTimeout>;
+};
+
+export const defaultSettings: HubSettings = {
+  contactPhone: "+63 999 000 0000",
+  contactMobile: "+63 999 000 0000",
+  contactEmail: "sheethappenswithjaa@gmail.com",
+  officeHours: "Daily · 7:00 AM – 9:00 PM (PHT)",
+  bookingNotice:
+    "Our team reviews every reservation manually. You will receive a call or text message once your booking is approved.",
 };
 
 function emptySeed(): HubState {
@@ -41,6 +60,7 @@ function emptySeed(): HubState {
     accounts: [],
     adminInvites: [],
     testimonials: [],
+    settings: { ...defaultSettings },
   };
 }
 
@@ -52,31 +72,35 @@ function getMemory(): HubState {
 
 let hydratePromise: Promise<void> | null = null;
 
-async function hydrateFromDisk() {
+function applyRemote(parsed: Partial<HubState> | null) {
+  if (!parsed?.listings || !parsed?.bookings) return;
+  const g = globalThis as GlobalStore;
+  g[GLOBAL_KEY] = {
+    revision: parsed.revision ?? 1,
+    listings: parsed.listings,
+    bookings: parsed.bookings,
+    destinations: parsed.destinations?.length
+      ? parsed.destinations
+      : structuredClone(seedDestinations),
+    accounts: parsed.accounts ?? [],
+    adminInvites: (parsed.adminInvites ?? []).map(normalizeEmail),
+    testimonials: parsed.testimonials ?? [],
+    settings: { ...defaultSettings, ...(parsed.settings ?? {}) },
+  };
+}
+
+async function hydrateFromRemote() {
+  if (!supabaseConfigured()) return;
   try {
-    const [{ readFile }, path] = await Promise.all([
-      import("node:fs/promises"),
-      import("node:path"),
-    ]);
-    const file = path.join(process.cwd(), ".data", "hub-store.json");
-    const raw = await readFile(file, "utf8");
-    const parsed = JSON.parse(raw) as HubState;
-    if (parsed?.listings && parsed?.bookings) {
-      const g = globalThis as GlobalStore;
-      g[GLOBAL_KEY] = {
-        revision: parsed.revision ?? 1,
-        listings: parsed.listings,
-        bookings: parsed.bookings,
-        destinations: parsed.destinations?.length
-          ? parsed.destinations
-          : structuredClone(seedDestinations),
-        accounts: parsed.accounts ?? [],
-        adminInvites: (parsed.adminInvites ?? []).map(normalizeEmail),
-        testimonials: parsed.testimonials ?? [],
-      };
+    const doc = await readHubDocument<Partial<HubState>>();
+    if (doc) {
+      applyRemote({ ...doc.data, revision: doc.revision });
+    } else {
+      // First boot against an empty database — publish the seed once.
+      await writeHubDocument(getMemory(), getMemory().revision);
     }
   } catch {
-    // No file yet or Cloudflare Worker (no durable FS) — keep memory seed.
+    // Table missing or network hiccup — memory seed still serves the app.
   }
 }
 
@@ -84,26 +108,22 @@ function schedulePersist() {
   const g = globalThis as GlobalStore;
   if (g.__explorehub_persist_timer) clearTimeout(g.__explorehub_persist_timer);
   g.__explorehub_persist_timer = setTimeout(() => {
-    void persistToDisk();
+    void persistToRemote();
   }, 250);
 }
 
-async function persistToDisk() {
+async function persistToRemote() {
+  if (!supabaseConfigured()) return;
   try {
-    const [{ mkdir, writeFile }, path] = await Promise.all([
-      import("node:fs/promises"),
-      import("node:path"),
-    ]);
-    const file = path.join(process.cwd(), ".data", "hub-store.json");
-    await mkdir(path.dirname(file), { recursive: true });
-    await writeFile(file, JSON.stringify(getMemory()), "utf8");
+    const state = getMemory();
+    await writeHubDocument(state, state.revision);
   } catch {
-    // Cloudflare Workers have no durable FS — memory store still serves warm isolates.
+    // Keep serving from memory; the next mutation retries the write.
   }
 }
 
 export async function ensureStore(): Promise<HubState> {
-  if (!hydratePromise) hydratePromise = hydrateFromDisk();
+  if (!hydratePromise) hydratePromise = hydrateFromRemote();
   await hydratePromise;
   return getMemory();
 }
@@ -115,12 +135,40 @@ function bump(state: HubState) {
 
 export async function getRevision() {
   const state = await ensureStore();
+  if (supabaseConfigured()) {
+    try {
+      const remote = await readHubRevision();
+      // Another worker isolate (or another device) mutated state — pull it in.
+      if (remote !== null && remote > state.revision) {
+        const doc = await readHubDocument<Partial<HubState>>();
+        if (doc) applyRemote({ ...doc.data, revision: doc.revision });
+        return getMemory().revision;
+      }
+    } catch {
+      // Ignore: fall back to the local revision.
+    }
+  }
   return state.revision;
 }
 
 export async function getSnapshot() {
-  return ensureStore();
+  const state = await ensureStore();
+  await getRevision();
+  return getMemory().revision === state.revision ? state : getMemory();
 }
+
+export async function getSettings(): Promise<HubSettings> {
+  const state = await ensureStore();
+  return { ...defaultSettings, ...state.settings };
+}
+
+export async function updateSettings(actorEmail: string, patch: Partial<HubSettings>) {
+  const state = await assertAdmin(actorEmail);
+  state.settings = { ...defaultSettings, ...state.settings, ...patch };
+  bump(state);
+  return state.settings;
+}
+
 
 export function resolveRole(email: string, invites: string[]): "tourist" | "admin" {
   const e = normalizeEmail(email);
