@@ -361,8 +361,34 @@ export async function createBookingRecord(input: {
   };
   state.bookings.unshift(booking);
   bump(state);
+  await mirrorBooking(booking);
   return booking;
 }
+
+/** Write the booking into the real Supabase table so admins see it in the dashboard/DB. */
+async function mirrorBooking(booking: Booking) {
+  if (!supabaseConfigured()) return;
+  try {
+    await upsertBookingRow({
+      id: booking.id,
+      reference: booking.reference,
+      listing_id: booking.listingId,
+      listing_title: booking.listingTitle,
+      kind: booking.kind,
+      guests: booking.guests,
+      date: booking.date,
+      total: booking.total,
+      status: booking.status,
+      paid: booking.paid,
+      customer: booking.customer,
+      customer_email: booking.customerEmail ?? null,
+      created_at: booking.createdAt ?? new Date().toISOString(),
+    });
+  } catch {
+    // Non-fatal: the booking still lives in the hub document.
+  }
+}
+
 
 export async function setBookingStatus(id: string, status: BookingStatus) {
   const state = await ensureStore();
