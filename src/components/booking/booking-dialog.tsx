@@ -1,6 +1,6 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
-import { CalendarDays, CheckCircle2, Download, Loader2, QrCode } from "lucide-react";
+import { CalendarDays, CheckCircle2, Download, Loader2, MessageSquare, Phone, QrCode } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { createBooking } from "@/lib/api";
+import { createBooking, fetchSettings } from "@/lib/api";
 import type { Booking, Listing } from "@/lib/types";
 import { peso } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -55,6 +55,7 @@ export function BookingDialog({
 }) {
   const [confirmed, setConfirmed] = useState<Booking | null>(null);
   const { user } = useAuth();
+  const settings = useQuery({ queryKey: ["hub-settings"], queryFn: fetchSettings });
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -134,10 +135,10 @@ export function BookingDialog({
             </motion.span>
             <DialogHeader className="mt-5">
               <DialogTitle className="text-center font-display text-2xl">
-                Booking confirmed
+                Reservation received
               </DialogTitle>
               <DialogDescription className="text-center">
-                We've emailed your digital confirmation and receipt.
+                Save your reference below — our admin team reviews it and confirms by call or text.
               </DialogDescription>
             </DialogHeader>
 
@@ -159,6 +160,48 @@ export function BookingDialog({
               </dl>
             </div>
 
+            <div className="mt-4 rounded-3xl border border-border bg-card p-5 text-left">
+              <p className="text-sm font-semibold">What happens next</p>
+              <ol className="mt-3 space-y-2 text-sm text-muted-foreground">
+                <li>
+                  1. Your reservation is now <strong className="text-foreground">pending admin approval</strong>.
+                </li>
+                <li>
+                  2. Our team will <strong className="text-foreground">call or send you a text message</strong>{" "}
+                  to confirm availability and payment — we do not send email confirmations.
+                </li>
+                <li>3. Keep your reference handy when you follow up or arrive on the day.</li>
+              </ol>
+              {settings.data?.bookingNotice ? (
+                <p className="mt-3 text-sm text-muted-foreground">{settings.data.bookingNotice}</p>
+              ) : null}
+              <Separator className="my-4" />
+              <p className="text-sm font-semibold">Need to follow up?</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {settings.data?.officeHours ?? "Daily · 7:00 AM – 9:00 PM (PHT)"}
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                {settings.data?.contactPhone ? (
+                  <Button asChild variant="outline" className="flex-1 rounded-full">
+                    <a href={`tel:${settings.data.contactPhone.replace(/[^+\d]/g, "")}`}>
+                      <Phone className="size-4" /> Call {settings.data.contactPhone}
+                    </a>
+                  </Button>
+                ) : null}
+                {settings.data?.contactMobile ? (
+                  <Button asChild variant="outline" className="flex-1 rounded-full">
+                    <a
+                      href={`sms:${settings.data.contactMobile.replace(/[^+\d]/g, "")}?&body=${encodeURIComponent(
+                        `Hi ExploreHub, following up on booking ${confirmed.reference}.`,
+                      )}`}
+                    >
+                      <MessageSquare className="size-4" /> Text admin
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+
             {countdown > 0 ? (
               <p className="mt-4 text-sm text-muted-foreground">
                 <strong className="text-foreground">{countdown} days</strong> until your trip begins
@@ -169,7 +212,7 @@ export function BookingDialog({
               <Button
                 variant="outline"
                 className="flex-1 rounded-full"
-                onClick={() => toast.success("Receipt downloaded")}
+                onClick={() => toast.success("Reference copied to your receipt")}
               >
                 <Download className="size-4" /> Receipt
               </Button>

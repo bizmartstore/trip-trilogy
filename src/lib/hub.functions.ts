@@ -8,6 +8,7 @@ import {
   deleteListingRecord,
   deleteTestimonialRecord,
   getRevision,
+  getSettings,
   getSnapshot,
   inviteAdmin,
   listAdminInvites,
@@ -16,6 +17,7 @@ import {
   setBookingStatus,
   signInAccount,
   updateListingRecord,
+  updateSettings,
   upsertOAuthAccount,
 } from "@/lib/store.server";
 import type { ListingInput, SearchFilters } from "@/lib/types";
@@ -60,6 +62,7 @@ export const fetchHubSnapshotFn = createServerFn({ method: "GET" }).handler(asyn
     destinations: state.destinations,
     testimonials: state.testimonials,
     adminInvites: state.adminInvites,
+    settings: state.settings,
   };
 });
 
@@ -288,3 +291,35 @@ export const searchListingsFn = createServerFn({ method: "POST" })
         return result.sort((a, b) => b.reviewCount - a.reviewCount);
     }
   });
+
+export const fetchSettingsFn = createServerFn({ method: "GET" }).handler(async () => getSettings());
+
+export const updateSettingsFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        actorEmail: emailSchema,
+        patch: z
+          .object({
+            contactPhone: z.string().trim().max(40).optional(),
+            contactMobile: z.string().trim().max(40).optional(),
+            contactEmail: z.string().trim().max(160).optional(),
+            officeHours: z.string().trim().max(120).optional(),
+            bookingNotice: z.string().trim().max(400).optional(),
+          })
+          .partial(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => updateSettings(data.actorEmail, data.patch));
+
+/** Keep-alive: tiny Supabase read that stops the database from idling out. */
+export const keepAliveFn = createServerFn({ method: "GET" }).handler(async () => {
+  const { pingSupabase, supabaseConfigured } = await import("@/lib/supabase-rest.server");
+  if (!supabaseConfigured()) return { ok: false as const, reason: "not-configured" };
+  try {
+    return await pingSupabase();
+  } catch {
+    return { ok: false as const, reason: "unreachable" };
+  }
+});

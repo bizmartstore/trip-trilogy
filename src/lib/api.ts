@@ -11,6 +11,7 @@ import {
   deleteTestimonialFn,
   fetchHubSnapshotFn,
   fetchRevisionFn,
+  fetchSettingsFn,
   inviteAdminFn,
   listAdminsFn,
   oauthSignInFn,
@@ -20,9 +21,11 @@ import {
   signInFn,
   updateBookingStatusFn,
   updateListingFn,
+  updateSettingsFn,
 } from "@/lib/hub.functions";
 import type {
   Booking,
+  HubSettings,
   BookingStatus,
   Destination,
   Listing,
@@ -254,4 +257,14 @@ export function destinationOptions() {
     return Array.from(new Set(cache.listings.map((l) => l.destination))).sort();
   }
   return ["El Nido", "Coron", "Puerto Princesa", "Port Barton", "San Vicente", "Balabac"];
+}
+
+export async function fetchSettings(): Promise<HubSettings> {
+  return fetchSettingsFn();
+}
+
+export async function updateSettings(actorEmail: string, patch: Partial<HubSettings>) {
+  const settings = await updateSettingsFn({ data: { actorEmail, patch } });
+  invalidateApiCache();
+  return settings;
 }

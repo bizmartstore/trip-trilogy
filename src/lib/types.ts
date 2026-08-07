@@ -115,6 +115,19 @@ export interface Testimonial {
   createdAt: string;
 }
 
+export interface HubSettings {
+  /** Primary number tourists can call for booking follow-ups. */
+  contactPhone: string;
+  /** Number that accepts SMS / Viber / WhatsApp messages. */
+  contactMobile: string;
+  contactEmail: string;
+  /** Office hours shown next to the contact details. */
+  officeHours: string;
+  /** Short note shown on the booking confirmation screen. */
+  bookingNotice: string;
+}
+
+
 export interface HubAccount {
   email: string;
   name: string;
