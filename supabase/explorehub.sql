@@ -39,3 +39,34 @@ alter table public.bookings enable row level security;
 
 -- 3. Optional: realtime broadcast for the bookings table
 alter publication supabase_realtime add table public.bookings;
+
+-- 4. Approval workflow metadata on bookings (safe to re-run)
+alter table public.bookings add column if not exists customer_phone text;
+alter table public.bookings add column if not exists notify_preference text default 'call';
+alter table public.bookings add column if not exists status_updated_at timestamptz;
+alter table public.bookings add column if not exists approved_at timestamptz;
+alter table public.bookings add column if not exists rejected_at timestamptz;
+alter table public.bookings add column if not exists status_by text;
+alter table public.bookings add column if not exists admin_note text;
+
+-- 5. Permanent account registry (every sign-up / Google sign-in lands here)
+create table if not exists public.accounts (
+  email text primary key,
+  name text not null,
+  role text not null default 'tourist',
+  picture text,
+  notify_preference text default 'call',
+  contact_number text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists accounts_role_idx on public.accounts (role);
+
+grant all on public.accounts to service_role;
+alter table public.accounts enable row level security;
+
+-- The main administrator email is always an admin
+insert into public.accounts (email, name, role)
+values ('sheethappenswithjaa@gmail.com', 'Main Admin', 'admin')
+on conflict (email) do update set role = 'admin';
