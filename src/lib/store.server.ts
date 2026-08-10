@@ -9,13 +9,16 @@ import { isMainAdminEmail, normalizeEmail } from "@/lib/constants";
 import {
   readHubDocument,
   readHubRevision,
+  listBookingRows,
   supabaseConfigured,
+  upsertAccountRow,
   upsertBookingRow,
   writeHubDocument,
 } from "@/lib/supabase-rest.server";
 import type {
   Booking,
   BookingStatus,
+  NotifyPreference,
   Destination,
   HubAccount,
   HubSettings,
@@ -216,6 +219,7 @@ export async function registerAccount(input: {
     state.adminInvites = state.adminInvites.filter((e) => e !== email);
   }
   bump(state);
+  await mirrorAccount(account);
   const { passwordHash: _, ...safe } = account;
   return { ok: true, account: safe };
 }
@@ -242,6 +246,7 @@ export async function signInAccount(input: {
     }
     bump(state);
   }
+  await mirrorAccount(existing);
   const { passwordHash: _, ...safe } = existing;
   return { ok: true, account: safe };
 }
@@ -274,6 +279,7 @@ export async function upsertOAuthAccount(input: {
     state.adminInvites = state.adminInvites.filter((e) => e !== email);
   }
   bump(state);
+  await mirrorAccount(account);
   const { passwordHash: _, ...safe } = account;
   return safe;
 }
@@ -336,6 +342,8 @@ export async function createBookingRecord(input: {
   total: number;
   customer: string;
   customerEmail?: string;
+  customerPhone?: string;
+  notifyPreference?: NotifyPreference;
 }): Promise<Booking> {
   const state = await ensureStore();
   const listing = state.listings.find((l) => l.id === input.listingId);
@@ -357,7 +365,10 @@ export async function createBookingRecord(input: {
     paid: false,
     customer: input.customer,
     customerEmail: input.customerEmail,
+    customerPhone: input.customerPhone,
+    notifyPreference: input.notifyPreference ?? "call",
     createdAt: new Date().toISOString(),
+    statusUpdatedAt: new Date().toISOString(),
   };
   state.bookings.unshift(booking);
   bump(state);
@@ -382,6 +393,13 @@ async function mirrorBooking(booking: Booking) {
       paid: booking.paid,
       customer: booking.customer,
       customer_email: booking.customerEmail ?? null,
+      customer_phone: booking.customerPhone ?? null,
+      notify_preference: booking.notifyPreference ?? "call",
+      status_updated_at: booking.statusUpdatedAt ?? null,
+      approved_at: booking.approvedAt ?? null,
+      rejected_at: booking.rejectedAt ?? null,
+      status_by: booking.statusBy ?? null,
+      admin_note: booking.adminNote ?? null,
       created_at: booking.createdAt ?? new Date().toISOString(),
     });
   } catch {
@@ -390,15 +408,120 @@ async function mirrorBooking(booking: Booking) {
 }
 
 
-export async function setBookingStatus(id: string, status: BookingStatus) {
+export async function setBookingStatus(
+  id: string,
+  status: BookingStatus,
+  options: { note?: string; actorEmail?: string } = {},
+) {
   const state = await ensureStore();
   const booking = state.bookings.find((b) => b.id === id);
   if (!booking) throw new Error("Booking not found");
+  const now = new Date().toISOString();
   booking.status = status;
+  booking.statusUpdatedAt = now;
+  if (options.actorEmail) booking.statusBy = normalizeEmail(options.actorEmail);
+  if (options.note !== undefined) booking.adminNote = options.note.trim() || undefined;
+  if (status === "approved" || status === "confirmed") booking.approvedAt = now;
+  if (status === "rejected" || status === "cancelled") booking.rejectedAt = now;
   bump(state);
   await mirrorBooking(booking);
-  return { id, status };
+  return {
+    id,
+    status,
+    statusUpdatedAt: booking.statusUpdatedAt,
+    approvedAt: booking.approvedAt,
+    rejectedAt: booking.rejectedAt,
+    adminNote: booking.adminNote,
+    statusBy: booking.statusBy,
+  };
+}
 
+/** Live feed straight from the Supabase `bookings` table (falls back to hub state). */
+export async function getBookingFeed(limit = 25) {
+  const state = await ensureStore();
+  if (supabaseConfigured()) {
+    try {
+      const rows = await listBookingRows(limit);
+      if (rows.length) {
+        return {
+          source: "supabase" as const,
+          bookings: rows.map((r) => ({
+            id: String(r["id"]),
+            reference: String(r["reference"] ?? ""),
+            listingTitle: String(r["listing_title"] ?? ""),
+            customer: String(r["customer"] ?? ""),
+            customerEmail: (r["customer_email"] as string | null) ?? undefined,
+            customerPhone: (r["customer_phone"] as string | null) ?? undefined,
+            guests: Number(r["guests"] ?? 1),
+            date: String(r["date"] ?? ""),
+            total: Number(r["total"] ?? 0),
+            status: String(r["status"] ?? "pending") as BookingStatus,
+            adminNote: (r["admin_note"] as string | null) ?? undefined,
+            createdAt: String(r["created_at"] ?? ""),
+            statusUpdatedAt: (r["status_updated_at"] as string | null) ?? undefined,
+          })),
+        };
+      }
+    } catch {
+      // fall through to hub state
+    }
+  }
+  return {
+    source: "local" as const,
+    bookings: state.bookings.slice(0, limit).map((b) => ({
+      id: b.id,
+      reference: b.reference,
+      listingTitle: b.listingTitle,
+      customer: b.customer,
+      customerEmail: b.customerEmail,
+      customerPhone: b.customerPhone,
+      guests: b.guests,
+      date: b.date,
+      total: b.total,
+      status: b.status,
+      adminNote: b.adminNote,
+      createdAt: b.createdAt ?? "",
+      statusUpdatedAt: b.statusUpdatedAt,
+    })),
+  };
+}
+
+/** Persist an account permanently in the Supabase `accounts` table. */
+async function mirrorAccount(account: HubAccount) {
+  if (!supabaseConfigured()) return;
+  try {
+    await upsertAccountRow({
+      email: account.email,
+      name: account.name,
+      role: account.role,
+      picture: account.picture ?? null,
+      notify_preference: account.notifyPreference ?? "call",
+      contact_number: account.contactNumber ?? null,
+      created_at: account.createdAt,
+      updated_at: new Date().toISOString(),
+    });
+  } catch {
+    // Non-fatal: the account still lives in the hub document.
+  }
+}
+
+export async function updateNotifyPreferences(input: {
+  email: string;
+  notifyPreference: NotifyPreference;
+  contactNumber?: string;
+}) {
+  const state = await ensureStore();
+  const email = normalizeEmail(input.email);
+  const account = state.accounts.find((a) => a.email === email);
+  if (!account) throw new Error("Account not found. Sign in again.");
+  account.notifyPreference = input.notifyPreference;
+  account.contactNumber = input.contactNumber?.trim() || undefined;
+  bump(state);
+  await mirrorAccount(account);
+  return {
+    notifyPreference: account.notifyPreference,
+    contactNumber: account.contactNumber,
+  };
 }
 
 export async function createListingRecord(actorEmail: string, input: ListingInput) {

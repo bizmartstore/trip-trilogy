@@ -9,6 +9,7 @@ import {
   deleteTestimonialRecord,
   getRevision,
   getSettings,
+  getBookingFeed,
   getSnapshot,
   inviteAdmin,
   listAdminInvites,
@@ -17,6 +18,7 @@ import {
   setBookingStatus,
   signInAccount,
   updateListingRecord,
+  updateNotifyPreferences,
   updateSettings,
   upsertOAuthAccount,
 } from "@/lib/store.server";
@@ -143,6 +145,8 @@ export const createBookingFn = createServerFn({ method: "POST" })
         total: z.number().min(0),
         customer: z.string().trim().min(2).max(80),
         customerEmail: z.string().email().optional(),
+        customerPhone: z.string().trim().max(40).optional(),
+        notifyPreference: z.enum(["call", "sms", "email", "any"]).optional(),
       })
       .parse(data),
   )
@@ -161,10 +165,30 @@ export const updateBookingStatusFn = createServerFn({ method: "POST" })
           "cancelled",
           "rejected",
         ]),
+        note: z.string().trim().max(500).optional(),
+        actorEmail: emailSchema.optional(),
       })
       .parse(data),
   )
-  .handler(async ({ data }) => setBookingStatus(data.id, data.status));
+  .handler(async ({ data }) =>
+    setBookingStatus(data.id, data.status, { note: data.note, actorEmail: data.actorEmail }),
+  );
+
+export const bookingFeedFn = createServerFn({ method: "GET" }).handler(async () =>
+  getBookingFeed(25),
+);
+
+export const updateNotifyPrefsFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        email: emailSchema,
+        notifyPreference: z.enum(["call", "sms", "email", "any"]),
+        contactNumber: z.string().trim().max(40).optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => updateNotifyPreferences(data));
 
 export const createListingFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
