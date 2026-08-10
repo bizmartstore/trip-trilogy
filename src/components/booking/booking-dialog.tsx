@@ -24,6 +24,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { createBooking, fetchSettings } from "@/lib/api";
 import type { Booking, Listing } from "@/lib/types";
@@ -36,6 +43,7 @@ const schema = z.object({
   phone: z.string().trim().min(6, "Enter a contact number").max(32),
   date: z.string().min(1, "Choose a date"),
   notes: z.string().max(400).optional(),
+  notifyPreference: z.enum(["call", "sms", "email", "any"]),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -65,6 +73,7 @@ export function BookingDialog({
       phone: "",
       date: "",
       notes: "",
+      notifyPreference: "call",
     },
   });
 
@@ -76,6 +85,7 @@ export function BookingDialog({
       phone: form.getValues("phone"),
       date: form.getValues("date"),
       notes: form.getValues("notes"),
+      notifyPreference: form.getValues("notifyPreference"),
     });
   }, [user, form]);
 
@@ -88,6 +98,8 @@ export function BookingDialog({
         total,
         customer: values.name,
         customerEmail: values.email,
+        customerPhone: values.phone,
+        notifyPreference: values.notifyPreference,
       }),
     onSuccess: (booking) => {
       setConfirmed(booking);
@@ -285,6 +297,33 @@ export function BookingDialog({
                       <FormControl>
                         <Input type="date" className="h-11 rounded-xl" {...field} />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="notifyPreference"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>How should we reach you?</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger className="h-11 rounded-xl">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="call">Phone call (fastest)</SelectItem>
+                          <SelectItem value="sms">Text / SMS message</SelectItem>
+                          <SelectItem value="email">Email when available</SelectItem>
+                          <SelectItem value="any">Any channel is fine</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Email delivery is not guaranteed — our admin team confirms every booking by
+                        call or text on the number above.
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
