@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { ContactSettings } from "@/components/admin/contact-settings";
+import { LiveBookingFeed } from "@/components/admin/live-booking-feed";
 import { RevenuePanel } from "@/components/admin/revenue-panel";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
@@ -135,15 +136,31 @@ function Admin() {
     [bookings.data],
   );
 
+  const [review, setReview] = useState<{
+    booking: Booking;
+    status: "approved" | "rejected";
+  } | null>(null);
+  const [reviewNote, setReviewNote] = useState("");
+
   const moderate = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: "confirmed" | "rejected" | "approved" }) =>
-      updateBookingStatus(id, status),
-    onSuccess: ({ id, status }) => {
+    mutationFn: ({
+      id,
+      status,
+      note,
+    }: {
+      id: string;
+      status: "confirmed" | "rejected" | "approved";
+      note?: string;
+    }) => updateBookingStatus(id, status, { note, actorEmail: user?.email }),
+    onSuccess: (result) => {
       qc.setQueryData<Booking[]>(["bookings"], (old) =>
-        old?.map((b) => (b.id === id ? { ...b, status } : b)),
+        old?.map((b) => (b.id === result.id ? { ...b, ...result } : b)),
       );
       void qc.invalidateQueries({ queryKey: ["bookings"] });
-      toast.success(`Booking ${status}`);
+      void qc.invalidateQueries({ queryKey: ["booking-feed"] });
+      setReview(null);
+      setReviewNote("");
+      toast.success(`Booking ${result.status}`);
     },
     onError: () => toast.error("Could not update booking"),
   });
@@ -345,7 +362,9 @@ function Admin() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="bookings" className="mt-6 overflow-x-auto">
+            <TabsContent value="bookings" className="mt-6 space-y-6">
+              <LiveBookingFeed />
+              <div className="overflow-x-auto">
               {bookings.isLoading ? (
                 <Skeleton className="h-40 w-full rounded-2xl" />
               ) : (
@@ -378,6 +397,16 @@ function Admin() {
                         <TableCell>{peso(b.total)}</TableCell>
                         <TableCell>
                           <StatusBadge status={b.status} />
+                          {b.statusUpdatedAt ? (
+                            <p className="mt-1 whitespace-nowrap text-[11px] text-muted-foreground">
+                              {new Date(b.statusUpdatedAt).toLocaleString()}
+                            </p>
+                          ) : null}
+                          {b.adminNote ? (
+                            <p className="max-w-[200px] truncate text-[11px] italic text-muted-foreground">
+                              “{b.adminNote}”
+                            </p>
+                          ) : null}
                         </TableCell>
                         <TableCell className="text-right">
                           {b.status === "pending" ? (
@@ -386,8 +415,10 @@ function Admin() {
                                 size="sm"
                                 variant="ghost"
                                 className="rounded-full"
-                                disabled={moderate.isPending}
-                                onClick={() => moderate.mutate({ id: b.id, status: "rejected" })}
+                                onClick={() => {
+                                  setReviewNote("");
+                                  setReview({ booking: b, status: "rejected" });
+                                }}
                               >
                                 <XCircle className="size-4" /> Reject
                               </Button>
@@ -395,8 +426,10 @@ function Admin() {
                                 size="sm"
                                 variant="outline"
                                 className="rounded-full"
-                                disabled={moderate.isPending}
-                                onClick={() => moderate.mutate({ id: b.id, status: "confirmed" })}
+                                onClick={() => {
+                                  setReviewNote("");
+                                  setReview({ booking: b, status: "approved" });
+                                }}
                               >
                                 <CheckCircle2 className="size-4" /> Approve
                               </Button>
@@ -415,6 +448,7 @@ function Admin() {
                   No bookings yet. Client reservations will appear here automatically.
                 </p>
               ) : null}
+              </div>
             </TabsContent>
 
             <TabsContent value="content" className="mt-6 space-y-4">
