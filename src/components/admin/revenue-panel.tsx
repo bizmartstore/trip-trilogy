@@ -1,4 +1,5 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { Download } from "lucide-react";
 import {
   Area,
   AreaChart,
@@ -9,44 +10,188 @@ import {
   YAxis,
 } from "recharts";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { Booking } from "@/lib/types";
 import { peso } from "@/lib/utils";
 
 const EARNING: Booking["status"][] = ["approved", "confirmed", "completed"];
 
+function bookingDay(b: Booking) {
+  return (b.createdAt ?? b.date).slice(0, 10);
+}
+
 export function RevenuePanel({ bookings }: { bookings: Booking[] }) {
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [experience, setExperience] = useState("all");
+
+  const experiences = useMemo(
+    () => Array.from(new Set(bookings.map((b) => b.listingTitle))).sort(),
+    [bookings],
+  );
+
+  const filtered = useMemo(
+    () =>
+      bookings.filter((b) => {
+        const day = bookingDay(b);
+        if (from && day < from) return false;
+        if (to && day > to) return false;
+        if (experience !== "all" && b.listingTitle !== experience) return false;
+        return true;
+      }),
+    [bookings, from, to, experience],
+  );
+
   const stats = useMemo(() => {
-    const earning = bookings.filter((b) => EARNING.includes(b.status));
+    const earning = filtered.filter((b) => EARNING.includes(b.status));
     const gross = earning.reduce((sum, b) => sum + b.total, 0);
     const collected = earning.filter((b) => b.paid).reduce((s, b) => s + b.total, 0);
-    const pending = bookings
+    const pending = filtered
       .filter((b) => b.status === "pending")
       .reduce((s, b) => s + b.total, 0);
+    const rejected = filtered.filter((b) => b.status === "rejected").length;
     const avg = earning.length ? gross / earning.length : 0;
 
     const byMonth = new Map<string, number>();
     for (const b of earning) {
-      const key = (b.createdAt ?? b.date).slice(0, 7);
+      const key = bookingDay(b).slice(0, 7);
       byMonth.set(key, (byMonth.get(key) ?? 0) + b.total);
     }
     const series = [...byMonth.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-8)
+      .slice(-12)
       .map(([month, total]) => ({ month, total }));
 
-    const byListing = new Map<string, number>();
+    const byListing = new Map<string, { total: number; count: number }>();
     for (const b of earning) {
-      byListing.set(b.listingTitle, (byListing.get(b.listingTitle) ?? 0) + b.total);
+      const cur = byListing.get(b.listingTitle) ?? { total: 0, count: 0 };
+      byListing.set(b.listingTitle, { total: cur.total + b.total, count: cur.count + 1 });
     }
-    const top = [...byListing.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5);
+    const top = [...byListing.entries()].sort((a, b) => b[1].total - a[1].total).slice(0, 6);
 
-    return { gross, collected, pending, avg, series, top, count: earning.length };
-  }, [bookings]);
+    return { gross, collected, pending, avg, series, top, count: earning.length, rejected };
+  }, [filtered]);
+
+  const exportCsv = () => {
+    const header = [
+      "reference",
+      "created_at",
+      "travel_date",
+      "experience",
+      "guest",
+      "email",
+      "phone",
+      "guests",
+      "status",
+      "paid",
+      "total_php",
+      "approved_at",
+      "rejected_at",
+      "admin_note",
+    ];
+    const escape = (v: unknown) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const rows = filtered.map((b) =>
+      [
+        b.reference,
+        b.createdAt ?? "",
+        b.date,
+        b.listingTitle,
+        b.customer,
+        b.customerEmail ?? "",
+        b.customerPhone ?? "",
+        b.guests,
+        b.status,
+        b.paid ? "yes" : "no",
+        b.total,
+        b.approvedAt ?? "",
+        b.rejectedAt ?? "",
+        b.adminNote ?? "",
+      ]
+        .map(escape)
+        .join(","),
+    );
+    const summary = [
+      "",
+      escape("SUMMARY") + ",".repeat(header.length - 1),
+      [escape("Gross earnings"), escape(stats.gross)].join(","),
+      [escape("Collected"), escape(stats.collected)].join(","),
+      [escape("Awaiting approval"), escape(stats.pending)].join(","),
+      [escape("Bookings counted"), escape(stats.count)].join(","),
+    ];
+    const csv = [header.join(","), ...rows, ...summary].join("\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `explorehub-earnings-${from || "all"}_${to || "all"}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const reset = () => {
+    setFrom("");
+    setTo("");
+    setExperience("all");
+  };
 
   return (
     <div className="space-y-6">
+      <div className="grid gap-4 rounded-3xl border border-border bg-secondary/30 p-5 md:grid-cols-[repeat(3,minmax(0,1fr))_auto] md:items-end">
+        <div className="space-y-1.5">
+          <Label htmlFor="rev-from">From</Label>
+          <Input
+            id="rev-from"
+            type="date"
+            value={from}
+            onChange={(e) => setFrom(e.target.value)}
+            className="h-11 rounded-xl"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="rev-to">To</Label>
+          <Input
+            id="rev-to"
+            type="date"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            className="h-11 rounded-xl"
+          />
+        </div>
+        <div className="space-y-1.5 min-w-0">
+          <Label>Experience</Label>
+          <Select value={experience} onValueChange={setExperience}>
+            <SelectTrigger className="h-11 rounded-xl">
+              <SelectValue placeholder="All experiences" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All experiences</SelectItem>
+              {experiences.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="ghost" className="rounded-full" onClick={reset}>
+            Reset
+          </Button>
+          <Button variant="hero" className="rounded-full" onClick={exportCsv}>
+            <Download className="size-4" /> Export CSV
+          </Button>
+        </div>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="Total earnings" value={peso(stats.gross)} hint={`${stats.count} approved bookings`} />
         <Metric label="Collected" value={peso(stats.collected)} hint="Marked as paid" />
@@ -85,14 +230,19 @@ export function RevenuePanel({ bookings }: { bookings: Booking[] }) {
         <p className="text-sm font-semibold">Top earning experiences</p>
         <ul className="mt-4 space-y-3">
           {stats.top.length ? (
-            stats.top.map(([title, total]) => (
+            stats.top.map(([title, v]) => (
               <li key={title} className="flex items-center justify-between gap-4 text-sm">
-                <span className="truncate">{title}</span>
-                <span className="shrink-0 font-semibold">{peso(total)}</span>
+                <span className="truncate">
+                  {title}
+                  <span className="ml-2 text-xs text-muted-foreground">{v.count} bookings</span>
+                </span>
+                <span className="shrink-0 font-semibold">{peso(v.total)}</span>
               </li>
             ))
           ) : (
-            <li className="text-sm text-muted-foreground">No approved bookings yet.</li>
+            <li className="text-sm text-muted-foreground">
+              No approved bookings match these filters.
+            </li>
           )}
         </ul>
       </div>
