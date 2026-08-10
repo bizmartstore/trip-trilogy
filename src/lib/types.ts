@@ -103,7 +103,21 @@ export interface Booking {
   customer: string;
   customerEmail?: string;
   createdAt?: string;
+  /** Contact number the traveller wants to be reached on. */
+  customerPhone?: string;
+  /** How the traveller prefers to be notified when email is not available. */
+  notifyPreference?: NotifyPreference;
+  /** Last status transition timestamp (ISO). */
+  statusUpdatedAt?: string;
+  approvedAt?: string;
+  rejectedAt?: string;
+  /** Admin who performed the last status change. */
+  statusBy?: string;
+  /** Internal note attached by the admin when approving / rejecting. */
+  adminNote?: string;
 }
+
+export type NotifyPreference = "call" | "sms" | "email" | "any";
 
 export interface Testimonial {
   id: string;
@@ -135,6 +149,8 @@ export interface HubAccount {
   role: "tourist" | "admin";
   picture?: string;
   createdAt: string;
+  notifyPreference?: NotifyPreference;
+  contactNumber?: string;
 }
 
 export interface SearchFilters {

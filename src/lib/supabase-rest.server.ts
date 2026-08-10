@@ -68,6 +68,23 @@ export async function upsertBookingRow(row: Record<string, unknown>) {
   });
 }
 
+/** Persist an account row so every sign-up lives permanently in Supabase. */
+export async function upsertAccountRow(row: Record<string, unknown>) {
+  await rest("accounts?on_conflict=email", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates" },
+    body: JSON.stringify([row]),
+  });
+}
+
+/** Read the newest booking rows straight from Supabase for the live admin feed. */
+export async function listBookingRows(limit = 30): Promise<Record<string, unknown>[]> {
+  const rows = (await rest(
+    `bookings?select=*&order=created_at.desc&limit=${limit}`,
+  )) as Record<string, unknown>[] | null;
+  return rows ?? [];
+}
+
 /** Keep-alive ping — a tiny read that prevents the project from idling out. */
 export async function pingSupabase() {
   const started = Date.now();
