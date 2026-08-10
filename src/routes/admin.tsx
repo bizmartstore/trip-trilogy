@@ -777,6 +777,86 @@ function Admin() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!review} onOpenChange={(v) => !v && setReview(null)}>
+        <DialogContent className="rounded-3xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">
+              {review?.status === "approved" ? "Approve reservation" : "Reject reservation"}
+            </DialogTitle>
+            <DialogDescription>
+              {review
+                ? `${review.booking.reference} · ${review.booking.customer} · ${peso(review.booking.total)}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {review ? (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-border bg-secondary/30 p-4 text-sm">
+                <p className="font-medium">{review.booking.listingTitle}</p>
+                <p className="text-xs text-muted-foreground">
+                  {review.booking.date} · {review.booking.guests} guest
+                  {review.booking.guests === 1 ? "" : "s"}
+                </p>
+                {review.booking.customerPhone ? (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Contact: {review.booking.customerPhone}
+                    {review.booking.notifyPreference
+                      ? ` · prefers ${review.booking.notifyPreference}`
+                      : ""}
+                  </p>
+                ) : null}
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="review-note">
+                  Note {review.status === "rejected" ? "(reason)" : "(optional)"}
+                </Label>
+                <Textarea
+                  id="review-note"
+                  rows={3}
+                  className="rounded-xl"
+                  placeholder={
+                    review.status === "approved"
+                      ? "Confirmed by phone, pickup 6:30 AM…"
+                      : "Fully booked on that date…"
+                  }
+                  value={reviewNote}
+                  onChange={(e) => setReviewNote(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Saved with a timestamp in Supabase and shown on the traveller's dashboard.
+                </p>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" className="rounded-full" onClick={() => setReview(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant={review.status === "approved" ? "hero" : "destructive"}
+                  className="rounded-full"
+                  disabled={moderate.isPending}
+                  onClick={() =>
+                    moderate.mutate({
+                      id: review.booking.id,
+                      status: review.status,
+                      note: reviewNote,
+                    })
+                  }
+                >
+                  {moderate.isPending ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : review.status === "approved" ? (
+                    "Approve booking"
+                  ) : (
+                    "Reject booking"
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
