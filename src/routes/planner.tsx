@@ -47,39 +47,49 @@ function Planner() {
   const [travellers, setTravellers] = useState(2);
   const [budget, setBudget] = useState(60000);
   const [interests, setInterests] = useState<string[]>(["beach", "food"]);
-  const [plan, setPlan] = useState<Listing[] | null>(null);
+  const [plan, setPlan] = useState<PlanOutput | null>(null);
   const [building, setBuilding] = useState(false);
 
-  const build = () => {
+  const build = (override?: Partial<PlanInput>) => {
+    const input: PlanInput = {
+      destination,
+      nights,
+      travellers,
+      budget,
+      interests,
+      ...override,
+    };
     setBuilding(true);
     setTimeout(() => {
-      const pool = listings.filter((l) => l.destination === destination);
-      const pick = (kind: Listing["kind"]) =>
-        pool
-          .filter((l) => l.kind === kind)
-          .sort((a, b) => {
-            const aScore = a.tags.filter((t) => interests.includes(t)).length;
-            const bScore = b.tags.filter((t) => interests.includes(t)).length;
-            return bScore - aScore || b.rating - a.rating;
-          })[0];
-
-      const result = [pick("stay"), pick("tour"), pick("restaurant")].filter(Boolean) as Listing[];
-      setPlan(result);
+      const output = buildPlan(input);
+      setPlan(output);
       setBuilding(false);
-      toast.success("Itinerary ready", {
-        description: `${result.length} recommendations for ${destination}.`,
-      });
-    }, 900);
+      if (output.best) {
+        toast.success("Itinerary ready", {
+          description: `${output.best.items.length} picks for ${input.destination} — ${peso(
+            Math.round(output.best.total),
+          )} of your ${peso(input.budget)} budget.`,
+        });
+      } else {
+        toast.warning("No itinerary fits this budget", {
+          description: "We've suggested the closest alternatives below.",
+        });
+      }
+    }, 700);
   };
 
-  const estimate = plan
-    ? plan.reduce((sum, l) => {
-        const unit = l.discountPct ? l.price * (1 - l.discountPct / 100) : l.price;
-        return sum + (l.kind === "stay" ? unit * nights : unit * travellers);
-      }, 0)
-    : 0;
+  const applySuggestion = (s: PlanSuggestion) => {
+    if (s.patch.destination !== undefined) setDestination(s.patch.destination);
+    if (s.patch.nights !== undefined) setNights(s.patch.nights);
+    if (s.patch.travellers !== undefined) setTravellers(s.patch.travellers);
+    if (s.patch.budget !== undefined) setBudget(s.patch.budget);
+    build(s.patch);
+  };
 
-  const withinBudget = estimate <= budget;
+  const best = plan?.best ?? null;
+  const estimate = best?.total ?? 0;
+  const withinBudget = !!best;
+
 
   return (
     <div className="pt-28">
