@@ -2,7 +2,6 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import {
   Bell,
-  Compass,
   LayoutDashboard,
   Menu,
   Moon,
