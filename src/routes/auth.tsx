@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
-import { Compass, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import nexoraLogo from "@/assets/nexora-logo.png.asset.json";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
