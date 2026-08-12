@@ -7,8 +7,8 @@ export interface AuthUser {
   role: "tourist" | "admin";
 }
 
-const KEY = "explorehub.user";
-const EVENT = "explorehub-auth";
+const KEY = "nexora.user";
+const EVENT = "nexora-auth";
 
 function read(): AuthUser | null {
   try {

@@ -67,11 +67,11 @@ import { peso } from "@/lib/utils";
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
-      { title: "Admin Console — Approvals & Content | ExploreHub" },
+      { title: "Admin Console — Approvals & Content | Nexora" },
       {
         name: "description",
         content:
-          "Approve bookings, manage tours, stays and dining, invite admins, and keep the ExploreHub marketplace current.",
+          "Approve bookings, manage tours, stays and dining, invite admins, and keep the Nexora marketplace current.",
       },
     ],
   }),
@@ -225,7 +225,7 @@ function Admin() {
           : [
               "data:image/svg+xml," +
                 encodeURIComponent(
-                  '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect fill="#0b2b2b" width="100%" height="100%"/><text x="50%" y="50%" fill="#c9a96e" font-size="28" text-anchor="middle" dy=".3em">ExploreHub</text></svg>',
+                  '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect fill="#0b2b2b" width="100%" height="100%"/><text x="50%" y="50%" fill="#c9a96e" font-size="28" text-anchor="middle" dy=".3em">Nexora</text></svg>',
                 ),
             ],
       };

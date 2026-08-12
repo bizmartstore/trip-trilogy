@@ -25,13 +25,13 @@ import { peso } from "@/lib/utils";
 export const Route = createFileRoute("/planner")({
   head: () => ({
     meta: [
-      { title: "Smart Trip Planner — Build a Costed Itinerary | ExploreHub" },
+      { title: "Smart Trip Planner — Build a Costed Itinerary | Nexora" },
       {
         name: "description",
         content:
-          "Enter your destination, dates, travellers and budget. ExploreHub assembles a costed itinerary of tours, stays and restaurants you can customise before booking.",
+          "Enter your destination, dates, travellers and budget. Nexora assembles a costed itinerary of tours, stays and restaurants you can customise before booking.",
       },
-      { property: "og:title", content: "Smart Trip Planner | ExploreHub" },
+      { property: "og:title", content: "Smart Trip Planner | Nexora" },
       {
         property: "og:description",
         content: "Auto-build a costed itinerary of tours, stays and restaurants for any budget.",

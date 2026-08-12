@@ -204,7 +204,7 @@ export function BookingDialog({
                   <Button asChild variant="outline" className="flex-1 rounded-full">
                     <a
                       href={`sms:${settings.data.contactMobile.replace(/[^+\d]/g, "")}?&body=${encodeURIComponent(
-                        `Hi ExploreHub, following up on booking ${confirmed.reference}.`,
+                        `Hi Nexora, following up on booking ${confirmed.reference}.`,
                       )}`}
                     >
                       <MessageSquare className="size-4" /> Text admin

@@ -14,13 +14,13 @@ import { fetchDestinations, fetchFeatured, fetchRecent, fetchTrending } from "@/
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "ExploreHub — Palawan Tours, Stays & Dining Marketplace" },
+      { title: "Nexora — Palawan Tours, Stays & Dining Marketplace" },
       {
         name: "description",
         content:
           "Discover verified tours, hand-picked hotels and standout restaurants across Palawan. Plan, book and manage every reservation from one premium travel marketplace.",
       },
-      { property: "og:title", content: "ExploreHub — Palawan Tours, Stays & Dining Marketplace" },
+      { property: "og:title", content: "Nexora — Palawan Tours, Stays & Dining Marketplace" },
       {
         property: "og:description",
         content:
@@ -64,7 +64,7 @@ function Home() {
           <SectionHeading
             eyebrow="Browse by category"
             title="Everything a trip needs, in one place"
-            description="Stop juggling four tabs and three confirmation emails. ExploreHub brings the entire trip under one roof."
+            description="Stop juggling four tabs and three confirmation emails. Nexora brings the entire trip under one roof."
           />
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {categories.map((c) => (
@@ -183,7 +183,7 @@ function Home() {
       <section className="section">
         <div className="container-x">
           <SectionHeading
-            eyebrow="New on ExploreHub"
+            eyebrow="New on Nexora"
             title="Recently added businesses"
             description="Freshly verified partners who joined the marketplace this month."
           />

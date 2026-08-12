@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { Compass, Facebook, Instagram, Mail, MapPin, Phone, Twitter } from "lucide-react";
+import { Facebook, Instagram, Mail, MapPin, Phone, Twitter } from "lucide-react";
+import nexoraLogo from "@/assets/nexora-logo.png.asset.json";
 import { toast } from "sonner";
 import { useState } from "react";
 
@@ -19,7 +20,7 @@ const columns = [
   {
     title: "Company",
     links: [
-      { label: "About ExploreHub", to: "/explore" as const },
+      { label: "About Nexora", to: "/explore" as const },
       { label: "Create account", to: "/auth" as const },
       { label: "Careers", to: "/explore" as const },
       { label: "Press", to: "/explore" as const },
@@ -45,10 +46,12 @@ export function Footer() {
         <div className="grid gap-12 lg:grid-cols-[1.4fr_2fr]">
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="grid size-9 place-items-center rounded-2xl bg-sand text-sand-foreground">
-                <Compass className="size-5" />
-              </span>
-              <span className="font-display text-xl font-semibold">ExploreHub</span>
+              <img
+                src={nexoraLogo.url}
+                alt="Nexora"
+                className="size-9 rounded-2xl bg-background object-contain"
+              />
+              <span className="font-display text-xl font-semibold">Nexora</span>
             </div>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-deep-foreground/70">
               One marketplace for tours, stays and tables — built for travellers who want the
@@ -90,7 +93,7 @@ export function Footer() {
                 <Phone className="size-4 shrink-0" /> +65 6555 0110
               </p>
               <p className="flex items-center gap-2">
-                <Mail className="size-4 shrink-0" /> hello@explorehub.travel
+                <Mail className="size-4 shrink-0" /> hello@nexora.travel
               </p>
             </div>
           </div>
@@ -120,7 +123,7 @@ export function Footer() {
 
         <div className="mt-14 flex flex-col items-center justify-between gap-5 border-t border-deep-foreground/15 pt-7 sm:flex-row">
           <p className="text-xs text-deep-foreground/60">
-            © {new Date().getFullYear()} ExploreHub. All rights reserved.
+            © {new Date().getFullYear()} Nexora. All rights reserved.
           </p>
           <div className="flex items-center gap-2">
             {[Instagram, Twitter, Facebook].map((Icon, i) => (

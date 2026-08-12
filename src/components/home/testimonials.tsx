@@ -122,7 +122,7 @@ export function Testimonials() {
               <Textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                placeholder="What did you love about booking with ExploreHub?"
+                placeholder="What did you love about booking with Nexora?"
                 className="min-h-28 rounded-xl"
                 maxLength={600}
               />
