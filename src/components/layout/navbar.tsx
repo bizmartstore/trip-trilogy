@@ -80,7 +80,7 @@ export function Navbar() {
                 overHero ? "text-deep-foreground" : "text-foreground",
               )}
             >
-              ExploreHub
+              Nexora
             </span>
           </Link>
 

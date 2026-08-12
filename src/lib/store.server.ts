@@ -38,11 +38,11 @@ export interface HubState {
   settings: HubSettings;
 }
 
-const GLOBAL_KEY = "__explorehub_store_v1__";
+const GLOBAL_KEY = "__nexora_store_v1__";
 
 type GlobalStore = typeof globalThis & {
   [GLOBAL_KEY]?: HubState;
-  __explorehub_persist_timer?: ReturnType<typeof setTimeout>;
+  __nexora_persist_timer?: ReturnType<typeof setTimeout>;
 };
 
 export const defaultSettings: HubSettings = {
@@ -109,8 +109,8 @@ async function hydrateFromRemote() {
 
 function schedulePersist() {
   const g = globalThis as GlobalStore;
-  if (g.__explorehub_persist_timer) clearTimeout(g.__explorehub_persist_timer);
-  g.__explorehub_persist_timer = setTimeout(() => {
+  if (g.__nexora_persist_timer) clearTimeout(g.__nexora_persist_timer);
+  g.__nexora_persist_timer = setTimeout(() => {
     void persistToRemote();
   }, 250);
 }
@@ -181,7 +181,7 @@ export function resolveRole(email: string, invites: string[]): "tourist" | "admi
 }
 
 export async function hashPassword(password: string) {
-  const data = new TextEncoder().encode(`explorehub:${password}`);
+  const data = new TextEncoder().encode(`nexora:${password}`);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -552,7 +552,7 @@ export async function createListingRecord(actorEmail: string, input: ListingInpu
       : [
           "data:image/svg+xml," +
             encodeURIComponent(
-              '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect fill="#0b2b2b" width="100%" height="100%"/><text x="50%" y="50%" fill="#c9a96e" font-size="28" text-anchor="middle" dy=".3em">ExploreHub</text></svg>',
+              '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600"><rect fill="#0b2b2b" width="100%" height="100%"/><text x="50%" y="50%" fill="#c9a96e" font-size="28" text-anchor="middle" dy=".3em">Nexora</text></svg>',
             ),
         ],
     amenities: input.amenities,

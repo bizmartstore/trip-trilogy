@@ -39,10 +39,10 @@ export const Route = createFileRoute("/listing/$slug")({
   },
   head: ({ loaderData }) => {
     if (!loaderData) {
-      return { meta: [{ title: "Listing unavailable | ExploreHub" }, { name: "robots", content: "noindex" }] };
+      return { meta: [{ title: "Listing unavailable | Nexora" }, { name: "robots", content: "noindex" }] };
     }
     const l = loaderData.listing;
-    const title = `${l.title} — ${l.destination}, ${l.country} | ExploreHub`;
+    const title = `${l.title} — ${l.destination}, ${l.country} | Nexora`;
     return {
       meta: [
         { title },

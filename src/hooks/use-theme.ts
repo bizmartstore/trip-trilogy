@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 
 type Theme = "light" | "dark";
 
-const KEY = "explorehub-theme";
+const KEY = "nexora-theme";
 
 function apply(theme: Theme) {
   document.documentElement.classList.toggle("dark", theme === "dark");

@@ -37,14 +37,14 @@ import { useAuth } from "@/hooks/use-auth";
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
-      { title: "My Trips Dashboard | ExploreHub" },
+      { title: "My Trips Dashboard | Nexora" },
       {
         name: "description",
         content:
           "Track every tour, stay and restaurant reservation in one place — statuses, spend, upcoming trips and notifications.",
       },
-      { property: "og:title", content: "My Trips Dashboard | ExploreHub" },
-      { property: "og:description", content: "Manage all your ExploreHub bookings in one dashboard." },
+      { property: "og:title", content: "My Trips Dashboard | Nexora" },
+      { property: "og:description", content: "Manage all your Nexora bookings in one dashboard." },
     ],
   }),
   component: Dashboard,
@@ -129,7 +129,7 @@ function Dashboard() {
               Welcome back, {user.name.split(" ")[0]}
             </h1>
             <p className="mt-2 text-muted-foreground">
-              Everything you've booked across ExploreHub, in one timeline.
+              Everything you've booked across Nexora, in one timeline.
             </p>
           </div>
           <Button asChild variant="hero" className="shrink-0 rounded-full">

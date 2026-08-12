@@ -1,4 +1,4 @@
--- ExploreHub · run this once in the Supabase SQL editor of your project
+-- Nexora · run this once in the Supabase SQL editor of your project
 -- (https://aeynekfhnzjcimskwouw.supabase.co  →  SQL Editor  →  New query).
 -- The app talks to these tables from the Cloudflare Worker with the service
 -- role key only, so no anon/authenticated grants are required.

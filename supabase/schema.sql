@@ -1,5 +1,5 @@
 -- ============================================================================
--- ExploreHub — Tourism Business Marketplace
+-- Nexora — Tourism Business Marketplace
 -- Full schema for Supabase (run in the SQL editor of your project).
 -- Order matters: enums -> tables -> grants -> RLS -> policies -> triggers.
 -- ============================================================================

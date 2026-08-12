@@ -71,7 +71,7 @@ export function ContactSettings({ actorEmail }: { actorEmail: string }) {
             className="h-11 rounded-xl"
             value={form.contactEmail}
             onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
-            placeholder="hello@explorehub.ph"
+            placeholder="hello@nexora.ph"
           />
         </Field>
         <Field label="Office hours">

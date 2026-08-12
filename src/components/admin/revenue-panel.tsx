@@ -132,7 +132,7 @@ export function RevenuePanel({ bookings }: { bookings: Booking[] }) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `explorehub-earnings-${from || "all"}_${to || "all"}.csv`;
+    a.download = `nexora-earnings-${from || "all"}_${to || "all"}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
