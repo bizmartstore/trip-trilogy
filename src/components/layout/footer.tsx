@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
-import { Compass, Facebook, Instagram, Mail, MapPin, Phone, Twitter } from "lucide-react";
+import { Facebook, Instagram, Mail, MapPin, Phone, Twitter } from "lucide-react";
+import nexoraLogo from "@/assets/nexora-logo.png.asset.json";
 import { toast } from "sonner";
 import { useState } from "react";
 
