@@ -25,6 +25,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import nexoraLogo from "@/assets/nexora-logo.png.asset.json";
 
 const nav = [
   { to: "/explore", label: "Explore", search: { kind: "all" as const } },
