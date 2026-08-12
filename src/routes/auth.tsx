@@ -136,7 +136,8 @@ function Auth() {
           className="w-full max-w-md"
         >
           <span className="flex items-center gap-2 font-display text-2xl font-semibold">
-            <Compass className="size-6 text-primary" /> Nexora
+            <img src={nexoraLogo.url} alt="Nexora" className="size-9 rounded-xl object-contain" />{" "}
+            Nexora
           </span>
 
           <div className="mt-8">
