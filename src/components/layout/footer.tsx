@@ -45,9 +45,11 @@ export function Footer() {
         <div className="grid gap-12 lg:grid-cols-[1.4fr_2fr]">
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="grid size-9 place-items-center rounded-2xl bg-sand text-sand-foreground">
-                <Compass className="size-5" />
-              </span>
+              <img
+                src={nexoraLogo.url}
+                alt="Nexora"
+                className="size-9 rounded-2xl bg-background object-contain"
+              />
               <span className="font-display text-xl font-semibold">Nexora</span>
             </div>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-deep-foreground/70">
