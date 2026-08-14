@@ -1,7 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-import { registerAccount, signInAccount, upsertOAuthAccount } from "@/lib/auth.server";
 import {
   addTestimonialRecord,
   createBookingRecord,
@@ -9,12 +8,19 @@ import {
   deleteListingRecord,
   deleteTestimonialRecord,
   getRevision,
+  getSettings,
+  getBookingFeed,
   getSnapshot,
   inviteAdmin,
   listAdminInvites,
+  registerAccount,
   removeAdminInvite,
   setBookingStatus,
+  signInAccount,
   updateListingRecord,
+  updateNotifyPreferences,
+  updateSettings,
+  upsertOAuthAccount,
 } from "@/lib/store.server";
 import type { ListingInput, SearchFilters } from "@/lib/types";
 
@@ -58,6 +64,7 @@ export const fetchHubSnapshotFn = createServerFn({ method: "GET" }).handler(asyn
     destinations: state.destinations,
     testimonials: state.testimonials,
     adminInvites: state.adminInvites,
+    settings: state.settings,
   };
 });
 
@@ -88,16 +95,14 @@ export const oauthSignInFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
     z
       .object({
-        idToken: z.string().min(1),
-        name: z.string().trim().min(1).max(80).optional(),
-        email: emailSchema.optional(),
+        name: z.string().trim().min(1).max(80),
+        email: emailSchema,
         picture: z.string().optional(),
       })
       .parse(data),
   )
   .handler(async ({ data }) =>
     upsertOAuthAccount({
-      idToken: data.idToken,
       name: data.name,
       email: data.email,
       picture: data.picture || undefined,
@@ -140,6 +145,8 @@ export const createBookingFn = createServerFn({ method: "POST" })
         total: z.number().min(0),
         customer: z.string().trim().min(2).max(80),
         customerEmail: z.string().email().optional(),
+        customerPhone: z.string().trim().max(40).optional(),
+        notifyPreference: z.enum(["call", "sms", "email", "any"]).optional(),
       })
       .parse(data),
   )
@@ -158,10 +165,30 @@ export const updateBookingStatusFn = createServerFn({ method: "POST" })
           "cancelled",
           "rejected",
         ]),
+        note: z.string().trim().max(500).optional(),
+        actorEmail: emailSchema.optional(),
       })
       .parse(data),
   )
-  .handler(async ({ data }) => setBookingStatus(data.id, data.status));
+  .handler(async ({ data }) =>
+    setBookingStatus(data.id, data.status, { note: data.note, actorEmail: data.actorEmail }),
+  );
+
+export const bookingFeedFn = createServerFn({ method: "GET" }).handler(async () =>
+  getBookingFeed(25),
+);
+
+export const updateNotifyPrefsFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        email: emailSchema,
+        notifyPreference: z.enum(["call", "sms", "email", "any"]),
+        contactNumber: z.string().trim().max(40).optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => updateNotifyPreferences(data));
 
 export const createListingFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
@@ -288,3 +315,36 @@ export const searchListingsFn = createServerFn({ method: "POST" })
         return result.sort((a, b) => b.reviewCount - a.reviewCount);
     }
   });
+
+export const fetchSettingsFn = createServerFn({ method: "GET" }).handler(async () => getSettings());
+
+export const updateSettingsFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        actorEmail: emailSchema,
+        patch: z
+          .object({
+            contactAddress: z.string().trim().max(240).optional(),
+            contactPhone: z.string().trim().max(40).optional(),
+            contactMobile: z.string().trim().max(40).optional(),
+            contactEmail: z.string().trim().max(160).optional(),
+            officeHours: z.string().trim().max(120).optional(),
+            bookingNotice: z.string().trim().max(400).optional(),
+          })
+          .partial(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => updateSettings(data.actorEmail, data.patch));
+
+/** Keep-alive: tiny Supabase read that stops the database from idling out. */
+export const keepAliveFn = createServerFn({ method: "GET" }).handler(async () => {
+  const { pingSupabase, supabaseConfigured } = await import("@/lib/supabase-rest.server");
+  if (!supabaseConfigured()) return { ok: false as const, reason: "not-configured" };
+  try {
+    return await pingSupabase();
+  } catch {
+    return { ok: false as const, reason: "unreachable" };
+  }
+});

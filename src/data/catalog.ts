@@ -77,7 +77,7 @@ const reviewPool = [
     avatar: "LF",
     rating: 5,
     date: "1 month ago",
-    body: "Booking through ExploreHub was seamless — confirmation was instant and the host was waiting for us.",
+    body: "Booking through Nexora was seamless — confirmation was instant and the host was waiting for us.",
   },
 ];
 

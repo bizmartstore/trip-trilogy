@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
-import { Compass, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import nexoraLogo from "@/assets/nexora-logo.png.asset.json";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -36,16 +37,16 @@ const signUpSchema = signInSchema.extend({
 export const Route = createFileRoute("/auth")({
   head: () => ({
     meta: [
-      { title: "Sign In or Create an Account | ExploreHub" },
+      { title: "Sign In or Create an Account | Nexora" },
       {
         name: "description",
         content:
-          "Sign in to manage your ExploreHub bookings, or create a traveller account to start booking Palawan experiences.",
+          "Sign in to manage your Nexora bookings, or create a traveller account to start booking Palawan experiences.",
       },
-      { property: "og:title", content: "Sign In | ExploreHub" },
+      { property: "og:title", content: "Sign In | Nexora" },
       {
         property: "og:description",
-        content: "Access your ExploreHub trips and bookings.",
+        content: "Access your Nexora trips and bookings.",
       },
     ],
   }),
@@ -140,7 +141,8 @@ function Auth() {
           className="w-full max-w-md"
         >
           <span className="flex items-center gap-2 font-display text-2xl font-semibold">
-            <Compass className="size-6 text-primary" /> ExploreHub
+            <img src={nexoraLogo.url} alt="Nexora" className="size-9 rounded-xl object-contain" />{" "}
+            Nexora
           </span>
 
           <div className="mt-8">
@@ -312,7 +314,7 @@ function Auth() {
           </Tabs>
 
           <p className="mt-6 text-center text-xs text-muted-foreground">
-            By continuing you agree to the ExploreHub Terms and Privacy Policy.
+            By continuing you agree to the Nexora Terms and Privacy Policy.
           </p>
         </motion.div>
       </div>

@@ -37,7 +37,7 @@ export function SearchStrip() {
             </DialogTrigger>
             <DialogContent className="rounded-3xl sm:max-w-lg">
               <DialogHeader>
-                <DialogTitle className="font-display">Search ExploreHub</DialogTitle>
+                <DialogTitle className="font-display">Search Nexora</DialogTitle>
                 <DialogDescription>
                   Filter by destination and category, then jump into results.
                 </DialogDescription>

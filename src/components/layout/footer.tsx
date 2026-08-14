@@ -1,10 +1,13 @@
 import { Link } from "@tanstack/react-router";
-import { Compass, Facebook, Instagram, Mail, MapPin, Phone, Twitter } from "lucide-react";
+import { Facebook, Instagram, Mail, MapPin, Phone, Twitter } from "lucide-react";
+import nexoraLogo from "@/assets/nexora-logo.png.asset.json";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { fetchSettings } from "@/lib/api";
 
 const columns = [
   {
@@ -19,7 +22,7 @@ const columns = [
   {
     title: "Company",
     links: [
-      { label: "About ExploreHub", to: "/explore" as const },
+      { label: "About Nexora", to: "/explore" as const },
       { label: "Create account", to: "/auth" as const },
       { label: "Careers", to: "/explore" as const },
       { label: "Press", to: "/explore" as const },
@@ -28,16 +31,18 @@ const columns = [
   {
     title: "Support",
     links: [
-      { label: "Help centre", to: "/explore" as const },
-      { label: "Cancellation policy", to: "/explore" as const },
-      { label: "Privacy policy", to: "/explore" as const },
-      { label: "Terms of service", to: "/explore" as const },
+      { label: "Help centre", to: "/help-centre" as const },
+      { label: "Cancellation policy", to: "/cancellation-policy" as const },
+      { label: "Privacy policy", to: "/privacy-policy" as const },
+      { label: "Terms of service", to: "/terms-of-service" as const },
     ],
   },
 ];
 
 export function Footer() {
   const [email, setEmail] = useState("");
+  const settings = useQuery({ queryKey: ["hub-settings"], queryFn: fetchSettings });
+  const contact = settings.data;
 
   return (
     <footer className="mt-24 bg-deep text-deep-foreground">
@@ -45,10 +50,12 @@ export function Footer() {
         <div className="grid gap-12 lg:grid-cols-[1.4fr_2fr]">
           <div>
             <div className="flex items-center gap-2.5">
-              <span className="grid size-9 place-items-center rounded-2xl bg-sand text-sand-foreground">
-                <Compass className="size-5" />
-              </span>
-              <span className="font-display text-xl font-semibold">ExploreHub</span>
+              <img
+                src={nexoraLogo.url}
+                alt="Nexora"
+                className="size-9 rounded-2xl bg-background object-contain"
+              />
+              <span className="font-display text-xl font-semibold">Nexora</span>
             </div>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-deep-foreground/70">
               One marketplace for tours, stays and tables — built for travellers who want the
@@ -84,14 +91,14 @@ export function Footer() {
 
             <div className="mt-7 space-y-2 text-sm text-deep-foreground/70">
               <p className="flex items-center gap-2">
-                <MapPin className="size-4 shrink-0" /> 14 Harbour Walk, Singapore 099253
+                <MapPin className="size-4 shrink-0" /> {contact?.contactAddress ?? "Palawan, Philippines"}
               </p>
-              <p className="flex items-center gap-2">
-                <Phone className="size-4 shrink-0" /> +65 6555 0110
-              </p>
-              <p className="flex items-center gap-2">
-                <Mail className="size-4 shrink-0" /> hello@explorehub.travel
-              </p>
+              <a className="flex items-center gap-2 hover:text-deep-foreground" href={`tel:${contact?.contactPhone ?? "+639990000000"}`}>
+                <Phone className="size-4 shrink-0" /> {contact?.contactPhone ?? "+63 999 000 0000"}
+              </a>
+              <a className="flex items-center gap-2 hover:text-deep-foreground" href={`mailto:${contact?.contactEmail ?? "sheethappenswithjaa@gmail.com"}`}>
+                <Mail className="size-4 shrink-0" /> {contact?.contactEmail ?? "sheethappenswithjaa@gmail.com"}
+              </a>
             </div>
           </div>
 
@@ -120,7 +127,7 @@ export function Footer() {
 
         <div className="mt-14 flex flex-col items-center justify-between gap-5 border-t border-deep-foreground/15 pt-7 sm:flex-row">
           <p className="text-xs text-deep-foreground/60">
-            © {new Date().getFullYear()} ExploreHub. All rights reserved.
+            © {new Date().getFullYear()} Nexora. All rights reserved.
           </p>
           <div className="flex items-center gap-2">
             {[Instagram, Twitter, Facebook].map((Icon, i) => (

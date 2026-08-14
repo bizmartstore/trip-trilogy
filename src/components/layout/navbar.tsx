@@ -2,7 +2,6 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import {
   Bell,
-  Compass,
   LayoutDashboard,
   Menu,
   Moon,
@@ -25,6 +24,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
+import nexoraLogo from "@/assets/nexora-logo.png.asset.json";
 
 const nav = [
   { to: "/explore", label: "Explore", search: { kind: "all" as const } },
@@ -66,21 +66,18 @@ export function Navbar() {
           )}
         >
           <Link to="/" className="flex min-w-0 items-center gap-2.5">
-            <span
-              className={cn(
-                "grid size-9 shrink-0 place-items-center rounded-2xl transition-colors",
-                overHero ? "bg-sand text-sand-foreground" : "bg-primary text-primary-foreground",
-              )}
-            >
-              <Compass className="size-5" />
-            </span>
+            <img
+              src={nexoraLogo.url}
+              alt="Nexora"
+              className="size-9 shrink-0 rounded-2xl object-contain"
+            />
             <span
               className={cn(
                 "truncate font-display text-lg font-semibold tracking-tight transition-colors",
                 overHero ? "text-deep-foreground" : "text-foreground",
               )}
             >
-              ExploreHub
+              Nexora
             </span>
           </Link>
 

@@ -40,13 +40,13 @@ export const Route = createFileRoute("/explore")({
   }),
   head: () => ({
     meta: [
-      { title: "Explore Tours, Stays & Restaurants | ExploreHub" },
+      { title: "Explore Tours, Stays & Restaurants | Nexora" },
       {
         name: "description",
         content:
           "Search thousands of verified tour packages, hotels, resorts and restaurants. Filter by price, rating, amenities, destination and travel style.",
       },
-      { property: "og:title", content: "Explore Tours, Stays & Restaurants | ExploreHub" },
+      { property: "og:title", content: "Explore Tours, Stays & Restaurants | Nexora" },
       {
         property: "og:description",
         content: "Search verified tours, stays and restaurants with advanced filters.",
@@ -182,7 +182,7 @@ function Explore() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
-          <h1 className="text-3xl font-semibold sm:text-4xl">Explore ExploreHub</h1>
+          <h1 className="text-3xl font-semibold sm:text-4xl">Explore Nexora</h1>
           <p className="mt-2 text-muted-foreground">
             One search across tour packages, hotels, resorts, restaurants and destinations.
           </p>

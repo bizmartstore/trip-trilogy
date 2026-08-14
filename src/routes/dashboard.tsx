@@ -15,6 +15,7 @@ import { Bell, CalendarCheck, Heart, Loader2, Plane, Wallet } from "lucide-react
 import { useEffect } from "react";
 import { toast } from "sonner";
 
+import { NotificationPreferences } from "@/components/dashboard/notification-preferences";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
@@ -36,14 +37,14 @@ import { useAuth } from "@/hooks/use-auth";
 export const Route = createFileRoute("/dashboard")({
   head: () => ({
     meta: [
-      { title: "My Trips Dashboard | ExploreHub" },
+      { title: "My Trips Dashboard | Nexora" },
       {
         name: "description",
         content:
           "Track every tour, stay and restaurant reservation in one place — statuses, spend, upcoming trips and notifications.",
       },
-      { property: "og:title", content: "My Trips Dashboard | ExploreHub" },
-      { property: "og:description", content: "Manage all your ExploreHub bookings in one dashboard." },
+      { property: "og:title", content: "My Trips Dashboard | Nexora" },
+      { property: "og:description", content: "Manage all your Nexora bookings in one dashboard." },
     ],
   }),
   component: Dashboard,
@@ -128,7 +129,7 @@ function Dashboard() {
               Welcome back, {user.name.split(" ")[0]}
             </h1>
             <p className="mt-2 text-muted-foreground">
-              Everything you've booked across ExploreHub, in one timeline.
+              Everything you've booked across Nexora, in one timeline.
             </p>
           </div>
           <Button asChild variant="hero" className="shrink-0 rounded-full">
@@ -217,6 +218,10 @@ function Dashboard() {
               />
             </TabsContent>
           </Tabs>
+        </div>
+
+        <div className="mt-8">
+          <NotificationPreferences email={user.email} />
         </div>
 
         <div className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-soft">
@@ -310,7 +315,19 @@ function BookingTable({
               <TableCell className="whitespace-nowrap">{b.date}</TableCell>
               <TableCell>{b.guests}</TableCell>
               <TableCell>{peso(b.total)}</TableCell>
-              <TableCell><StatusBadge status={b.status} /></TableCell>
+              <TableCell>
+                <StatusBadge status={b.status} />
+                {b.statusUpdatedAt ? (
+                  <p className="mt-1 whitespace-nowrap text-[11px] text-muted-foreground">
+                    {new Date(b.statusUpdatedAt).toLocaleDateString()}
+                  </p>
+                ) : null}
+                {b.adminNote ? (
+                  <p className="max-w-[200px] truncate text-[11px] italic text-muted-foreground">
+                    “{b.adminNote}”
+                  </p>
+                ) : null}
+              </TableCell>
               <TableCell className="text-right">
                 {["pending", "approved", "confirmed"].includes(b.status) ? (
                   <Button

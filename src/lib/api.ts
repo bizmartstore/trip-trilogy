@@ -5,12 +5,14 @@
 import { allTags } from "@/data/catalog";
 import {
   addTestimonialFn,
+  bookingFeedFn,
   createBookingFn,
   createListingFn,
   deleteListingFn,
   deleteTestimonialFn,
   fetchHubSnapshotFn,
   fetchRevisionFn,
+  fetchSettingsFn,
   inviteAdminFn,
   listAdminsFn,
   oauthSignInFn,
@@ -20,9 +22,13 @@ import {
   signInFn,
   updateBookingStatusFn,
   updateListingFn,
+  updateNotifyPrefsFn,
+  updateSettingsFn,
 } from "@/lib/hub.functions";
 import type {
   Booking,
+  NotifyPreference,
+  HubSettings,
   BookingStatus,
   Destination,
   Listing,
@@ -133,6 +139,8 @@ export interface CreateBookingInput {
   total: number;
   customer: string;
   customerEmail?: string;
+  customerPhone?: string;
+  notifyPreference?: NotifyPreference;
 }
 
 export async function createBooking(input: CreateBookingInput): Promise<Booking> {
@@ -144,6 +152,8 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
       total: input.total,
       customer: input.customer,
       customerEmail: input.customerEmail,
+      customerPhone: input.customerPhone,
+      notifyPreference: input.notifyPreference,
     },
   });
   invalidateApiCache();
@@ -153,8 +163,26 @@ export async function createBooking(input: CreateBookingInput): Promise<Booking>
 export async function updateBookingStatus(
   id: string,
   status: BookingStatus,
-): Promise<{ id: string; status: BookingStatus }> {
-  const result = await updateBookingStatusFn({ data: { id, status } });
+  options: { note?: string; actorEmail?: string } = {},
+) {
+  const result = await updateBookingStatusFn({
+    data: { id, status, note: options.note, actorEmail: options.actorEmail },
+  });
+  invalidateApiCache();
+  return result;
+}
+
+/** Live booking feed read straight from Supabase. */
+export async function fetchBookingFeed() {
+  return bookingFeedFn();
+}
+
+export async function updateNotifyPreferences(input: {
+  email: string;
+  notifyPreference: NotifyPreference;
+  contactNumber?: string;
+}) {
+  const result = await updateNotifyPrefsFn({ data: input });
   invalidateApiCache();
   return result;
 }
@@ -255,4 +283,14 @@ export function destinationOptions() {
     return Array.from(new Set(cache.listings.map((l) => l.destination))).sort();
   }
   return ["El Nido", "Coron", "Puerto Princesa", "Port Barton", "San Vicente", "Balabac"];
+}
+
+export async function fetchSettings(): Promise<HubSettings> {
+  return fetchSettingsFn();
+}
+
+export async function updateSettings(actorEmail: string, patch: Partial<HubSettings>) {
+  const settings = await updateSettingsFn({ data: { actorEmail, patch } });
+  invalidateApiCache();
+  return settings;
 }
