@@ -5,6 +5,7 @@
  */
 import { destinations as seedDestinations, demoBookings, listings as seedListings } from "@/data/catalog";
 import { isMainAdminEmail, normalizeEmail } from "@/lib/constants";
+import { isSupabaseConfigured } from "@/lib/supabase.server";
 import type {
   Booking,
   BookingStatus,
@@ -143,91 +144,6 @@ function slugify(title: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "")
     .slice(0, 72);
-}
-
-export async function registerAccount(input: {
-  name: string;
-  email: string;
-  password: string;
-}): Promise<{ ok: true; account: Omit<HubAccount, "passwordHash"> } | { ok: false; error: string }> {
-  const state = await ensureStore();
-  const email = normalizeEmail(input.email);
-  if (state.accounts.some((a) => a.email === email)) {
-    return { ok: false, error: "An account with this email already exists. Sign in instead." };
-  }
-  const role = resolveRole(email, state.adminInvites);
-  const account: HubAccount = {
-    email,
-    name: input.name.trim(),
-    passwordHash: await hashPassword(input.password),
-    role,
-    createdAt: new Date().toISOString(),
-  };
-  state.accounts.push(account);
-  if (role === "admin" && !isMainAdminEmail(email)) {
-    state.adminInvites = state.adminInvites.filter((e) => e !== email);
-  }
-  bump(state);
-  const { passwordHash: _, ...safe } = account;
-  return { ok: true, account: safe };
-}
-
-export async function signInAccount(input: {
-  email: string;
-  password: string;
-}): Promise<{ ok: true; account: Omit<HubAccount, "passwordHash"> } | { ok: false; error: string }> {
-  const state = await ensureStore();
-  const email = normalizeEmail(input.email);
-  const existing = state.accounts.find((a) => a.email === email);
-  if (!existing) {
-    return { ok: false, error: "No account found for that email. Create an account first." };
-  }
-  const hash = await hashPassword(input.password);
-  if (hash !== existing.passwordHash) {
-    return { ok: false, error: "Incorrect password." };
-  }
-  const role = resolveRole(email, state.adminInvites);
-  if (existing.role !== role) {
-    existing.role = role;
-    if (role === "admin" && !isMainAdminEmail(email)) {
-      state.adminInvites = state.adminInvites.filter((e) => e !== email);
-    }
-    bump(state);
-  }
-  const { passwordHash: _, ...safe } = existing;
-  return { ok: true, account: safe };
-}
-
-export async function upsertOAuthAccount(input: {
-  name: string;
-  email: string;
-  picture?: string;
-}): Promise<Omit<HubAccount, "passwordHash">> {
-  const state = await ensureStore();
-  const email = normalizeEmail(input.email);
-  const role = resolveRole(email, state.adminInvites);
-  let account = state.accounts.find((a) => a.email === email);
-  if (!account) {
-    account = {
-      email,
-      name: input.name.trim() || email.split("@")[0],
-      passwordHash: await hashPassword(crypto.randomUUID()),
-      role,
-      picture: input.picture,
-      createdAt: new Date().toISOString(),
-    };
-    state.accounts.push(account);
-  } else {
-    account.name = input.name.trim() || account.name;
-    account.picture = input.picture ?? account.picture;
-    account.role = role;
-  }
-  if (role === "admin" && !isMainAdminEmail(email)) {
-    state.adminInvites = state.adminInvites.filter((e) => e !== email);
-  }
-  bump(state);
-  const { passwordHash: _, ...safe } = account;
-  return safe;
 }
 
 export async function inviteAdmin(actorEmail: string, inviteEmail: string) {
@@ -440,10 +356,10 @@ export async function addTestimonialRecord(input: {
   const state = await ensureStore();
   const email = normalizeEmail(input.email);
   const account = state.accounts.find((a) => a.email === email);
-  if (!account) throw new Error("Sign in to leave feedback.");
+  if (!account && !isSupabaseConfigured()) throw new Error("Sign in to leave feedback.");
   const testimonial: Testimonial = {
     id: crypto.randomUUID(),
-    author: input.author.trim() || account.name,
+    author: input.author.trim() || account?.name || email.split("@")[0],
     email,
     role: input.role?.trim() || "Traveller",
     body: input.body.trim(),

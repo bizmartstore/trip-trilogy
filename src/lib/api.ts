@@ -222,8 +222,9 @@ export async function signInAccount(input: { email: string; password: string }) 
 }
 
 export async function oauthSignIn(input: {
-  name: string;
-  email: string;
+  idToken: string;
+  name?: string;
+  email?: string;
   picture?: string;
 }) {
   return oauthSignInFn({ data: input });

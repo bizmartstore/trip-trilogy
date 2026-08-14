@@ -65,6 +65,7 @@ export function GoogleSignInButton() {
                 return;
               }
               const account = await oauthSignIn({
+                idToken: response.credential,
                 name: profile.name ?? "Traveller",
                 email: profile.email,
                 picture: profile.picture,
@@ -82,8 +83,10 @@ export function GoogleSignInButton() {
               if (isMainAdminEmail(account.email)) {
                 toast.message("Main admin access granted");
               }
-            } catch {
-              toast.error("Could not complete Google sign-in.");
+            } catch (err) {
+              toast.error(
+                err instanceof Error ? err.message : "Could not complete Google sign-in.",
+              );
             }
           },
         });

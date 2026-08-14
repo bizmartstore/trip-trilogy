@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
+import { registerAccount, signInAccount, upsertOAuthAccount } from "@/lib/auth.server";
 import {
   addTestimonialRecord,
   createBookingRecord,
@@ -11,12 +12,9 @@ import {
   getSnapshot,
   inviteAdmin,
   listAdminInvites,
-  registerAccount,
   removeAdminInvite,
   setBookingStatus,
-  signInAccount,
   updateListingRecord,
-  upsertOAuthAccount,
 } from "@/lib/store.server";
 import type { ListingInput, SearchFilters } from "@/lib/types";
 
@@ -90,14 +88,16 @@ export const oauthSignInFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
     z
       .object({
-        name: z.string().trim().min(1).max(80),
-        email: emailSchema,
+        idToken: z.string().min(1),
+        name: z.string().trim().min(1).max(80).optional(),
+        email: emailSchema.optional(),
         picture: z.string().optional(),
       })
       .parse(data),
   )
   .handler(async ({ data }) =>
     upsertOAuthAccount({
+      idToken: data.idToken,
       name: data.name,
       email: data.email,
       picture: data.picture || undefined,

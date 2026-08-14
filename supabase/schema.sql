@@ -17,6 +17,7 @@ create table public.profiles (
   id          uuid primary key references auth.users(id) on delete cascade,
   full_name   text,
   avatar_url  text,
+  email       text unique,
   phone       text,
   country     text,
   created_at  timestamptz not null default now()
