@@ -211,7 +211,7 @@ function Planner() {
                 </div>
               </div>
 
-              <Button variant="hero" size="lg" className="w-full rounded-full" onClick={build} disabled={building}>
+              <Button variant="hero" size="lg" className="w-full rounded-full" onClick={() => build()} disabled={building}>
                 {building ? (
                   <>
                     <Loader2 className="size-4 animate-spin" /> Building itinerary…
