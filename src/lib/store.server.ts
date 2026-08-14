@@ -118,22 +118,77 @@ function rowToBooking(row: Record<string, unknown>, listings: Listing[]): Bookin
   };
 }
 
-function mapFeedBooking(row: Record<string, unknown>) {
+function mapBookingToFeed(booking: Booking) {
   return {
-    id: String(row["id"]),
-    reference: String(row["reference"] ?? ""),
-    listingTitle: String(row["listing_title"] ?? ""),
-    customer: String(row["customer"] ?? ""),
-    customerEmail: (row["customer_email"] as string | null) ?? undefined,
-    customerPhone: (row["customer_phone"] as string | null) ?? undefined,
-    guests: Number(row["guests"] ?? 1),
-    date: String(row["date"] ?? ""),
-    total: Number(row["total"] ?? 0),
-    status: String(row["status"] ?? "pending") as BookingStatus,
-    adminNote: (row["admin_note"] as string | null) ?? undefined,
-    createdAt: String(row["created_at"] ?? ""),
-    statusUpdatedAt: (row["status_updated_at"] as string | null) ?? undefined,
+    id: booking.id,
+    reference: booking.reference,
+    listingTitle: booking.listingTitle,
+    customer: booking.customer,
+    customerEmail: booking.customerEmail,
+    customerPhone: booking.customerPhone,
+    guests: booking.guests,
+    date: booking.date,
+    total: booking.total,
+    status: booking.status,
+    adminNote: booking.adminNote,
+    createdAt: booking.createdAt ?? "",
+    statusUpdatedAt: booking.statusUpdatedAt,
   };
+}
+
+function sortBookingsNewestFirst(bookings: Booking[]) {
+  return [...bookings].sort(
+    (a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime(),
+  );
+}
+
+/** Merge hub document bookings with Supabase table rows (table wins on id conflict). */
+async function mergeAllBookings(): Promise<Booking[]> {
+  await ensureStore();
+  await refreshStoreBookings();
+  const state = getMemory();
+  const merged = new Map<string, Booking>();
+
+  for (const booking of sanitizeDemoBookings(state.bookings)) {
+    merged.set(booking.id, booking);
+  }
+
+  if (supabaseConfigured()) {
+    try {
+      const doc = await readHubDocument<Partial<HubState>>();
+      const hubBookings = doc?.data?.bookings ?? [];
+      for (const raw of hubBookings) {
+        if (!raw || typeof raw !== "object") continue;
+        const booking = rowToBooking(raw as Record<string, unknown>, state.listings);
+        merged.set(booking.id, booking);
+      }
+    } catch {
+      // hub document unavailable
+    }
+
+    try {
+      const rows = await listAllBookingRows();
+      for (const row of rows) {
+        const booking = rowToBooking(row, state.listings);
+        merged.set(booking.id, booking);
+      }
+    } catch {
+      // bookings table unavailable
+    }
+  }
+
+  return sortBookingsNewestFirst(Array.from(merged.values()));
+}
+
+async function backfillBookingsTable(bookings: Booking[]) {
+  if (!supabaseConfigured() || !bookings.length) return;
+  keepAlive(
+    (async () => {
+      for (const booking of bookings) {
+        await mirrorBooking(booking);
+      }
+    })().catch(() => undefined),
+  );
 }
 
 /** Drop demo review bundles shipped with the seed catalog. */
@@ -750,35 +805,50 @@ async function mirrorBooking(booking: Booking, required = false) {
     if (required) throw new Error("Booking database is not configured.");
     return;
   }
+
+  const minimalRow = {
+    id: booking.id,
+    reference: booking.reference,
+    listing_id: booking.listingId,
+    listing_title: booking.listingTitle,
+    kind: booking.kind,
+    guests: booking.guests,
+    date: booking.date,
+    total: booking.total,
+    status: booking.status,
+    paid: booking.paid,
+    customer: booking.customer,
+    customer_email: booking.customerEmail ?? null,
+    created_at: booking.createdAt ?? new Date().toISOString(),
+  };
+
+  const fullRow = {
+    ...minimalRow,
+    customer_phone: booking.customerPhone ?? null,
+    notify_preference: booking.notifyPreference ?? "call",
+    status_updated_at: booking.statusUpdatedAt ?? null,
+    approved_at: booking.approvedAt ?? null,
+    rejected_at: booking.rejectedAt ?? null,
+    status_by: booking.statusBy ?? null,
+    admin_note: booking.adminNote ?? null,
+  };
+
   try {
-    await upsertBookingRow({
-      id: booking.id,
-      reference: booking.reference,
-      listing_id: booking.listingId,
-      listing_title: booking.listingTitle,
-      kind: booking.kind,
-      guests: booking.guests,
-      date: booking.date,
-      total: booking.total,
-      status: booking.status,
-      paid: booking.paid,
-      customer: booking.customer,
-      customer_email: booking.customerEmail ?? null,
-      customer_phone: booking.customerPhone ?? null,
-      notify_preference: booking.notifyPreference ?? "call",
-      status_updated_at: booking.statusUpdatedAt ?? null,
-      approved_at: booking.approvedAt ?? null,
-      rejected_at: booking.rejectedAt ?? null,
-      status_by: booking.statusBy ?? null,
-      admin_note: booking.adminNote ?? null,
-      created_at: booking.createdAt ?? new Date().toISOString(),
-    });
+    await upsertBookingRow(fullRow);
+    return;
   } catch (err) {
-    console.error("[booking] mirror failed:", booking.reference, err);
-    if (required) {
-      throw err instanceof Error ? err : new Error("Could not save booking to database.");
+    console.error("[booking] full mirror failed:", booking.reference, err);
+    try {
+      await upsertBookingRow(minimalRow);
+      return;
+    } catch (minimalErr) {
+      console.error("[booking] minimal mirror failed:", booking.reference, minimalErr);
+      if (required) {
+        throw minimalErr instanceof Error
+          ? minimalErr
+          : new Error("Could not save booking to database.");
+      }
     }
-    // Non-fatal for status updates when the hub document already has the booking.
   }
 }
 
@@ -847,54 +917,38 @@ export async function setBookingStatus(
   };
 }
 
-/** Live feed straight from the Supabase `bookings` table. */
+/** Live feed — merges Supabase table rows with hub document reservations. */
 export async function getBookingFeed(limit = 25) {
-  const state = await ensureStore();
+  const { syncEnvFromGlobal } = await import("@/lib/worker-env");
+  syncEnvFromGlobal();
+
+  const merged = await mergeAllBookings();
+  void backfillBookingsTable(merged);
+
+  let tableCount = 0;
   if (supabaseConfigured()) {
     try {
-      const rows = await listBookingRows(limit);
-      return {
-        source: "supabase" as const,
-        bookings: rows.map(mapFeedBooking),
-      };
+      tableCount = (await listBookingRows(limit)).length;
     } catch {
-      // fall through to hub state only when Supabase is unreachable
+      tableCount = 0;
     }
   }
+
+  const bookings = merged.slice(0, limit).map(mapBookingToFeed);
   return {
-    source: "local" as const,
-    bookings: sanitizeDemoBookings(state.bookings)
-      .slice(0, limit)
-      .map((b) => ({
-        id: b.id,
-        reference: b.reference,
-        listingTitle: b.listingTitle,
-        customer: b.customer,
-        customerEmail: b.customerEmail,
-        customerPhone: b.customerPhone,
-        guests: b.guests,
-        date: b.date,
-        total: b.total,
-        status: b.status,
-        adminNote: b.adminNote,
-        createdAt: b.createdAt ?? "",
-        statusUpdatedAt: b.statusUpdatedAt,
-      })),
+    source: tableCount > 0 ? ("supabase" as const) : merged.length ? ("local" as const) : ("supabase" as const),
+    bookings,
   };
 }
 
-/** Admin console + revenue — always reads the Supabase bookings table when available. */
+/** Admin console + revenue — merges every reservation source for a complete queue. */
 export async function getAdminBookings(): Promise<Booking[]> {
-  const state = await ensureStore();
-  if (supabaseConfigured()) {
-    try {
-      const rows = await listAllBookingRows();
-      return rows.map((row) => rowToBooking(row, state.listings));
-    } catch {
-      // fall through
-    }
-  }
-  return sanitizeDemoBookings(state.bookings);
+  const { syncEnvFromGlobal } = await import("@/lib/worker-env");
+  syncEnvFromGlobal();
+
+  const merged = await mergeAllBookings();
+  void backfillBookingsTable(merged);
+  return merged;
 }
 
 /** Traveller dashboard bookings — prefers Supabase rows for the signed-in email. */

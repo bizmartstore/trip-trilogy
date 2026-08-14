@@ -36,7 +36,11 @@ export function LiveBookingFeed() {
           <Radio className="size-4 animate-pulse text-success" /> Live reservation feed
         </p>
         <Badge className="rounded-full border-0 bg-success/15 text-success">
-          {feed.data?.source === "supabase" ? "Supabase · live" : "Local state"}
+          {feed.data?.source === "supabase"
+            ? "Supabase · live"
+            : feed.data?.bookings.length
+              ? "Hub · synced"
+              : "Waiting for bookings"}
         </Badge>
       </div>
 
