@@ -17,9 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { listings } from "@/data/catalog";
 import { destinationOptions, tagOptions } from "@/lib/api";
-import type { Listing } from "@/lib/types";
+import {
+  buildPlan,
+  lineCost,
+  type PlanInput,
+  type PlanOutput,
+  type PlanSuggestion,
+} from "@/lib/planner";
 import { peso } from "@/lib/utils";
 
 export const Route = createFileRoute("/planner")({
