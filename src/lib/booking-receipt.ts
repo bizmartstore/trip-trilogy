@@ -35,7 +35,14 @@ function loadImage(src: string) {
   });
 }
 
-function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
+function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+) {
   const words = text.split(" ");
   let line = "";
   let cy = y;
@@ -53,12 +60,42 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: num
   return cy;
 }
 
+function drawCenteredLines(
+  ctx: CanvasRenderingContext2D,
+  lines: string[],
+  centerX: number,
+  y: number,
+  lineHeight: number,
+) {
+  let cy = y;
+  for (const line of lines) {
+    ctx.fillText(line, centerX, cy);
+    cy += lineHeight;
+  }
+  return cy;
+}
+
+function splitUrlLines(url: string, maxChars = 42) {
+  const plain = url.replace(/^https?:\/\//, "");
+  if (plain.length <= maxChars) return [plain];
+  const parts: string[] = [];
+  let rest = plain;
+  while (rest.length > maxChars) {
+    let cut = rest.lastIndexOf("/", maxChars);
+    if (cut < maxChars * 0.4) cut = maxChars;
+    parts.push(rest.slice(0, cut));
+    rest = rest.slice(cut);
+  }
+  if (rest) parts.push(rest);
+  return parts;
+}
+
 export async function downloadBookingReceipt(
   booking: Booking,
   options: { qrDataUrl: string; settings?: HubSettings },
 ) {
   const width = 400;
-  const height = 640;
+  const height = 680;
   const canvas = document.createElement("canvas");
   canvas.width = width * 2;
   canvas.height = height * 2;
@@ -98,32 +135,60 @@ export async function downloadBookingReceipt(
     ["Status", bookingStatusLabel(booking.status)],
   ];
 
+  const labelX = 20;
+  const valueX = 118;
+  const valueMaxWidth = width - valueX - 20;
+
   ctx.font = "13px 'Segoe UI', system-ui, sans-serif";
   let y = 118;
   for (const [label, value] of rows) {
+    ctx.textAlign = "left";
     ctx.fillStyle = "#64748b";
-    ctx.fillText(label, 20, y);
+    ctx.font = "13px 'Segoe UI', system-ui, sans-serif";
+    ctx.fillText(label, labelX, y);
     ctx.fillStyle = "#0b2b2b";
     ctx.font = "600 13px 'Segoe UI', system-ui, sans-serif";
-    const lines = wrapText(ctx, value, width - 20, y, width - 130, 16);
-    y = Math.max(lines, y) + 22;
-    ctx.font = "13px 'Segoe UI', system-ui, sans-serif";
+    const endY = wrapText(ctx, value, valueX, y, valueMaxWidth, 16);
+    y = endY + 22;
   }
 
   const qr = await loadImage(options.qrDataUrl);
   const qrSize = 108;
   const qrX = (width - qrSize) / 2;
-  ctx.drawImage(qr, qrX, height - 188, qrSize, qrSize);
+  const qrY = Math.max(y + 12, height - 210);
+  ctx.drawImage(qr, qrX, qrY, qrSize, qrSize);
+
   ctx.fillStyle = "#64748b";
   ctx.font = "11px 'Segoe UI', system-ui, sans-serif";
   ctx.textAlign = "center";
-  ctx.fillText("Scan to view this reservation online", width / 2, height - 64);
+  let footerY = qrY + qrSize + 18;
+  footerY = drawCenteredLines(
+    ctx,
+    ["Scan to view this reservation online"],
+    width / 2,
+    footerY,
+    14,
+  );
+
   const confirmUrl = bookingConfirmationUrl(booking.reference);
   ctx.font = "9px ui-monospace, monospace";
-  ctx.fillText(confirmUrl.replace(/^https?:\/\//, ""), width / 2, height - 48);
+  footerY = drawCenteredLines(
+    ctx,
+    splitUrlLines(confirmUrl),
+    width / 2,
+    footerY + 2,
+    12,
+  );
+
   if (options.settings?.contactPhone) {
     ctx.font = "11px 'Segoe UI', system-ui, sans-serif";
-    ctx.fillText(`Follow up: ${options.settings.contactPhone}`, width / 2, height - 26);
+    footerY = drawCenteredLines(
+      ctx,
+      [`Follow up: ${options.settings.contactPhone}`],
+      width / 2,
+      footerY + 4,
+      14,
+    );
   }
   ctx.textAlign = "left";
 

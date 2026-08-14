@@ -231,12 +231,19 @@ async function purgeDemoBookingsEverywhere(state: HubState) {
     } catch {
       // Non-fatal — hub document cleanup still runs.
     }
-    const rows = await listAllBookingRows();
-    const synced = rows.map((row) => rowToBooking(row, state.listings));
-    const syncedIds = synced.map((b) => b.id).sort().join(",");
-    if (syncedIds !== state.bookings.map((b) => b.id).sort().join(",")) {
-      state.bookings = synced;
-      changed = true;
+    try {
+      const rows = await listAllBookingRows();
+      const synced = rows.map((row) => rowToBooking(row, state.listings));
+      const merged = new Map(state.bookings.map((b) => [b.id, b]));
+      for (const booking of synced) merged.set(booking.id, booking);
+      const mergedList = sanitizeDemoBookings(Array.from(merged.values()));
+      const mergedIds = mergedList.map((b) => b.id).sort().join(",");
+      if (mergedIds !== state.bookings.map((b) => b.id).sort().join(",")) {
+        state.bookings = mergedList;
+        changed = true;
+      }
+    } catch {
+      // Bookings table unavailable — keep hub document rows intact.
     }
   }
 
@@ -728,14 +735,17 @@ export async function createBookingRecord(input: {
       kind: "booking",
     });
   }
-  bump(state);
+  await bumpAndWait(state);
   await mirrorBooking(booking);
   return booking;
 }
 
 /** Write the booking into the real Supabase table so admins see it in the dashboard/DB. */
-async function mirrorBooking(booking: Booking) {
-  if (!supabaseConfigured()) return;
+async function mirrorBooking(booking: Booking, required = false) {
+  if (!supabaseConfigured()) {
+    if (required) throw new Error("Booking database is not configured.");
+    return;
+  }
   try {
     await upsertBookingRow({
       id: booking.id,
@@ -759,8 +769,11 @@ async function mirrorBooking(booking: Booking) {
       admin_note: booking.adminNote ?? null,
       created_at: booking.createdAt ?? new Date().toISOString(),
     });
-  } catch {
-    // Non-fatal: the booking still lives in the hub document.
+  } catch (err) {
+    if (required) {
+      throw err instanceof Error ? err : new Error("Could not save booking to database.");
+    }
+    // Non-fatal for status updates when the hub document already has the booking.
   }
 }
 
@@ -898,10 +911,22 @@ export async function getBookingsForEmail(email: string): Promise<Booking[]> {
   );
 }
 
+async function refreshStoreBookings() {
+  if (!supabaseConfigured()) return;
+  try {
+    const doc = await readHubDocument<Partial<HubState>>();
+    if (doc) applyRemote({ ...doc.data, revision: doc.revision });
+  } catch {
+    // fall through to in-memory state
+  }
+}
+
 /** Public lookup for QR confirmation pages and receipts. */
 export async function getBookingByReference(reference: string): Promise<Booking | null> {
-  const state = await ensureStore();
-  const ref = reference.trim();
+  await ensureStore();
+  await refreshStoreBookings();
+  const state = getMemory();
+  const ref = decodeURIComponent(reference.trim());
   if (!ref) return null;
 
   if (supabaseConfigured()) {

@@ -33,6 +33,7 @@ create table if not exists public.bookings (
 
 create index if not exists bookings_status_idx on public.bookings (status);
 create index if not exists bookings_created_at_idx on public.bookings (created_at desc);
+create unique index if not exists bookings_reference_idx on public.bookings (reference);
 
 grant all on public.bookings to service_role;
 alter table public.bookings enable row level security;

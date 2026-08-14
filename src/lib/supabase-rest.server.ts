@@ -81,7 +81,7 @@ export async function writeHubDocument(data: unknown, revision: number) {
 export async function upsertBookingRow(row: Record<string, unknown>) {
   await rest("bookings?on_conflict=id", {
     method: "POST",
-    headers: { Prefer: "resolution=merge-duplicates" },
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
     body: JSON.stringify([row]),
   });
 }
@@ -152,11 +152,18 @@ export async function deleteDemoBookingRows(references: string[]) {
 export async function listBookingRowsByReference(
   reference: string,
 ): Promise<Record<string, unknown>[]> {
-  const encoded = encodeURIComponent(reference.trim());
+  const ref = reference.trim();
+  const encoded = encodeURIComponent(ref);
   const rows = (await rest(
     `bookings?reference=eq.${encoded}&select=*&limit=1`,
   )) as Record<string, unknown>[] | null;
-  return rows ?? [];
+  if (rows?.length) return rows;
+
+  const ilike = encodeURIComponent(ref);
+  const fallback = (await rest(
+    `bookings?reference=ilike.${ilike}&select=*&limit=1`,
+  )) as Record<string, unknown>[] | null;
+  return fallback ?? [];
 }
 
 /** Keep-alive ping — a tiny read that prevents the project from idling out. */
