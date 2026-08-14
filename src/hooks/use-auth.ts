@@ -9,6 +9,9 @@ export interface AuthUser {
 
 const EVENT = "nexora-auth";
 
+/** In-memory session mirror — updated after sign-in and from /api/auth/me when available. */
+let cachedUser: AuthUser | null = null;
+
 async function fetchSession(): Promise<AuthUser | null> {
   try {
     const res = await fetch("/api/auth/me", {
@@ -16,25 +19,33 @@ async function fetchSession(): Promise<AuthUser | null> {
       headers: { accept: "application/json" },
     });
     if (res.status === 401) return null;
-    if (!res.ok) return null;
+    if (res.status === 404) return cachedUser;
+    if (!res.ok) return cachedUser;
     const data = (await res.json()) as { user?: AuthUser | null };
     return data.user ?? null;
   } catch {
-    return null;
+    return cachedUser;
   }
 }
 
-/** Tell all useAuth hooks to reload the session from the server (cookie already set). */
+/** Set the signed-in user immediately after a successful auth API response. */
+export function applyAuthUser(user: AuthUser) {
+  cachedUser = user;
+  window.dispatchEvent(new Event(EVENT));
+}
+
+/** Tell all useAuth hooks to reload the session from the server. */
 export function notifyAuthChanged() {
   window.dispatchEvent(new Event(EVENT));
 }
 
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(cachedUser);
   const [ready, setReady] = useState(false);
 
   const refresh = useCallback(async () => {
     const session = await fetchSession();
+    cachedUser = session;
     setUser(session);
     setReady(true);
     return session;
@@ -43,6 +54,7 @@ export function useAuth() {
   useEffect(() => {
     refresh();
     const sync = () => {
+      setUser(cachedUser);
       refresh();
     };
     window.addEventListener(EVENT, sync);
@@ -50,13 +62,14 @@ export function useAuth() {
   }, [refresh]);
 
   const signOut = useCallback(async () => {
+    cachedUser = null;
     try {
       await fetch("/api/auth/sign-out", {
         method: "POST",
         credentials: "same-origin",
       });
     } catch {
-      // Still clear local state if the network call fails.
+      // Non-fatal when the sign-out route is unavailable.
     }
     setUser(null);
     window.dispatchEvent(new Event(EVENT));

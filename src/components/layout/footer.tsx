@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import { Facebook, Instagram, Mail, MapPin, Phone, Twitter } from "lucide-react";
-import nexoraLogo from "@/assets/nexora-logo.png.asset.json";
+import { NEXORA_LOGO_SRC } from "@/lib/brand";
 import { toast } from "sonner";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -51,7 +51,7 @@ export function Footer() {
           <div>
             <div className="flex items-center gap-2.5">
               <img
-                src={nexoraLogo.url}
+                src={NEXORA_LOGO_SRC}
                 alt="Nexora"
                 className="size-9 rounded-2xl bg-background object-contain"
               />

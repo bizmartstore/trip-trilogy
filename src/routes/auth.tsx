@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { Loader2 } from "lucide-react";
-import nexoraLogo from "@/assets/nexora-logo.png.asset.json";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -21,8 +20,9 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import heroImage from "@/assets/hero.jpg";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
-import { notifyAuthChanged } from "@/hooks/use-auth";
+import { applyAuthUser } from "@/hooks/use-auth";
 import { registerAccount, signInAccount } from "@/lib/api";
+import { NEXORA_LOGO_SRC } from "@/lib/brand";
 import { isMainAdminEmail } from "@/lib/constants";
 
 const signInSchema = z.object({
@@ -68,7 +68,12 @@ function Auth() {
   });
 
   const afterAuth = (account: { name: string; email: string; role: "tourist" | "admin"; picture?: string }) => {
-    notifyAuthChanged();
+    applyAuthUser({
+      name: account.name,
+      email: account.email,
+      role: account.role,
+      picture: account.picture,
+    });
     if (account.role === "admin") {
       toast.success(
         isMainAdminEmail(account.email)
@@ -132,7 +137,7 @@ function Auth() {
           className="w-full max-w-md"
         >
           <span className="flex items-center gap-2 font-display text-2xl font-semibold">
-            <img src={nexoraLogo.url} alt="Nexora" className="size-9 rounded-xl object-contain" />{" "}
+            <img src={NEXORA_LOGO_SRC} alt="Nexora" className="size-9 rounded-xl object-contain" />{" "}
             Nexora
           </span>
 

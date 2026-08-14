@@ -23,8 +23,8 @@ import {
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
+import { NEXORA_LOGO_SRC } from "@/lib/brand";
 import { useAuth } from "@/hooks/use-auth";
-import nexoraLogo from "@/assets/nexora-logo.png.asset.json";
 
 const nav = [
   { to: "/explore", label: "Explore", search: { kind: "all" as const } },
@@ -67,7 +67,7 @@ export function Navbar() {
         >
           <Link to="/" className="flex min-w-0 items-center gap-2.5">
             <img
-              src={nexoraLogo.url}
+              src={NEXORA_LOGO_SRC}
               alt="Nexora"
               className="size-9 shrink-0 rounded-2xl object-contain"
             />
