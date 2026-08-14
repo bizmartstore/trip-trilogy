@@ -47,6 +47,7 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    // Nitro also sets globalThis.__env__; keep both paths in sync for server fns.
     applyCloudflareEnv(
       env,
       ctx as { waitUntil?: (promise: Promise<unknown>) => void },
