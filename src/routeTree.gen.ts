@@ -20,6 +20,9 @@ import { Route as PlannerRouteImport } from './routes/planner'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as ListingSlugRouteImport } from './routes/listing.$slug'
+import { Route as ApiAuthOauthRouteImport } from './routes/api/auth/oauth'
+import { Route as ApiAuthRegisterRouteImport } from './routes/api/auth/register'
+import { Route as ApiAuthSignInRouteImport } from './routes/api/auth/sign-in'
 import { Route as ApiPublicKeepaliveRouteImport } from './routes/api/public/keepalive'
 
 const IndexRoute = IndexRouteImport.update({
@@ -77,6 +80,21 @@ const ListingSlugRoute = ListingSlugRouteImport.update({
   path: '/listing/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthOauthRoute = ApiAuthOauthRouteImport.update({
+  id: '/api/auth/oauth',
+  path: '/api/auth/oauth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthRegisterRoute = ApiAuthRegisterRouteImport.update({
+  id: '/api/auth/register',
+  path: '/api/auth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSignInRoute = ApiAuthSignInRouteImport.update({
+  id: '/api/auth/sign-in',
+  path: '/api/auth/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicKeepaliveRoute = ApiPublicKeepaliveRouteImport.update({
   id: '/api/public/keepalive',
   path: '/api/public/keepalive',
@@ -95,6 +113,9 @@ export interface FileRoutesByFullPath {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/listing/$slug': typeof ListingSlugRoute
+  '/api/auth/oauth': typeof ApiAuthOauthRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
 export interface FileRoutesByTo {
@@ -109,6 +130,9 @@ export interface FileRoutesByTo {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/listing/$slug': typeof ListingSlugRoute
+  '/api/auth/oauth': typeof ApiAuthOauthRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
 export interface FileRoutesById {
@@ -124,6 +148,9 @@ export interface FileRoutesById {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/listing/$slug': typeof ListingSlugRoute
+  '/api/auth/oauth': typeof ApiAuthOauthRoute
+  '/api/auth/register': typeof ApiAuthRegisterRoute
+  '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
 export interface FileRouteTypes {
@@ -140,6 +167,9 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/terms-of-service'
     | '/listing/$slug'
+    | '/api/auth/oauth'
+    | '/api/auth/register'
+    | '/api/auth/sign-in'
     | '/api/public/keepalive'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -154,6 +184,9 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/terms-of-service'
     | '/listing/$slug'
+    | '/api/auth/oauth'
+    | '/api/auth/register'
+    | '/api/auth/sign-in'
     | '/api/public/keepalive'
   id:
     | '__root__'
@@ -168,6 +201,9 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/terms-of-service'
     | '/listing/$slug'
+    | '/api/auth/oauth'
+    | '/api/auth/register'
+    | '/api/auth/sign-in'
     | '/api/public/keepalive'
   fileRoutesById: FileRoutesById
 }
@@ -183,6 +219,9 @@ export interface RootRouteChildren {
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   TermsOfServiceRoute: typeof TermsOfServiceRoute
   ListingSlugRoute: typeof ListingSlugRoute
+  ApiAuthOauthRoute: typeof ApiAuthOauthRoute
+  ApiAuthRegisterRoute: typeof ApiAuthRegisterRoute
+  ApiAuthSignInRoute: typeof ApiAuthSignInRoute
   ApiPublicKeepaliveRoute: typeof ApiPublicKeepaliveRoute
 }
 
@@ -265,6 +304,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ListingSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/oauth': {
+      id: '/api/auth/oauth'
+      path: '/api/auth/oauth'
+      fullPath: '/api/auth/oauth'
+      preLoaderRoute: typeof ApiAuthOauthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/register': {
+      id: '/api/auth/register'
+      path: '/api/auth/register'
+      fullPath: '/api/auth/register'
+      preLoaderRoute: typeof ApiAuthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/sign-in': {
+      id: '/api/auth/sign-in'
+      path: '/api/auth/sign-in'
+      fullPath: '/api/auth/sign-in'
+      preLoaderRoute: typeof ApiAuthSignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/keepalive': {
       id: '/api/public/keepalive'
       path: '/api/public/keepalive'
@@ -287,6 +347,9 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   TermsOfServiceRoute: TermsOfServiceRoute,
   ListingSlugRoute: ListingSlugRoute,
+  ApiAuthOauthRoute: ApiAuthOauthRoute,
+  ApiAuthRegisterRoute: ApiAuthRegisterRoute,
+  ApiAuthSignInRoute: ApiAuthSignInRoute,
   ApiPublicKeepaliveRoute: ApiPublicKeepaliveRoute,
 }
 export const routeTree = rootRouteImport

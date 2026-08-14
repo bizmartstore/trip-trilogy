@@ -78,7 +78,11 @@ export const registerFn = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }) => registerAccount(data));
+  .handler(async ({ data }) => {
+    const { syncEnvFromGlobal } = await import("@/lib/worker-env");
+    syncEnvFromGlobal();
+    return registerAccount(data);
+  });
 
 export const signInFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
@@ -89,7 +93,11 @@ export const signInFn = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }) => signInAccount(data));
+  .handler(async ({ data }) => {
+    const { syncEnvFromGlobal } = await import("@/lib/worker-env");
+    syncEnvFromGlobal();
+    return signInAccount(data);
+  });
 
 export const oauthSignInFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
@@ -101,13 +109,15 @@ export const oauthSignInFn = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }) =>
-    upsertOAuthAccount({
+  .handler(async ({ data }) => {
+    const { syncEnvFromGlobal } = await import("@/lib/worker-env");
+    syncEnvFromGlobal();
+    return upsertOAuthAccount({
       name: data.name,
       email: data.email,
       picture: data.picture || undefined,
-    }),
-  );
+    });
+  });
 
 export const inviteAdminFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>

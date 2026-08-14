@@ -5,5 +5,7 @@ import { createServerFn } from "@tanstack/react-start";
  * The value is stored as a project secret and read at call time.
  */
 export const getGoogleClientId = createServerFn({ method: "GET" }).handler(async () => {
-  return { clientId: process.env.GOOGLE_OAUTH_CLIENT_ID ?? "" };
+  const { firstEnv, syncEnvFromGlobal } = await import("@/lib/worker-env");
+  syncEnvFromGlobal();
+  return { clientId: firstEnv("GOOGLE_OAUTH_CLIENT_ID") };
 });

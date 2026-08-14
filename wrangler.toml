@@ -1,7 +1,10 @@
 # Cloudflare Worker deploy for Nexora (TanStack Start + Nitro).
-# Secrets (do not put these in this file):
+# Secrets (do not put these in this file) — required for sign-up / sign-in:
 #   wrangler secret put NEXORA_SUPABASE_SERVICE_ROLE_KEY
+#   (optional alias) wrangler secret put SUPABASE_SERVICE_ROLE_KEY
 #   wrangler secret put GOOGLE_OAUTH_CLIENT_ID
+# Also add the same names in Lovable → Cloud → Secrets, then Publish.
+# Lovable auto SUPABASE_* Edge Function secrets are NOT injected into this Worker.
 name = "trip-trilogy"
 main = ".output/server/index.mjs"
 compatibility_date = "2026-08-14"

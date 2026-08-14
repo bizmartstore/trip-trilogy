@@ -237,16 +237,46 @@ export async function removeTestimonial(actorEmail: string, id: string) {
   return result;
 }
 
+async function postAuthJson<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify(body),
+    credentials: "same-origin",
+  });
+  const text = await res.text();
+  let parsed: unknown = null;
+  try {
+    parsed = text ? JSON.parse(text) : null;
+  } catch {
+    throw new Error(
+      res.ok
+        ? "Unexpected auth response."
+        : `Auth request failed (${res.status}). Try refreshing the page.`,
+    );
+  }
+  return parsed as T;
+}
+
 export async function registerAccount(input: {
   name: string;
   email: string;
   password: string;
 }) {
-  return registerFn({ data: input });
+  // Prefer the API route (same Worker path as keepalive) so secrets stay in scope.
+  try {
+    return await postAuthJson<Awaited<ReturnType<typeof registerFn>>>("/api/auth/register", input);
+  } catch {
+    return registerFn({ data: input });
+  }
 }
 
 export async function signInAccount(input: { email: string; password: string }) {
-  return signInFn({ data: input });
+  try {
+    return await postAuthJson<Awaited<ReturnType<typeof signInFn>>>("/api/auth/sign-in", input);
+  } catch {
+    return signInFn({ data: input });
+  }
 }
 
 export async function oauthSignIn(input: {
@@ -255,13 +285,26 @@ export async function oauthSignIn(input: {
   email: string;
   picture?: string;
 }) {
-  return oauthSignInFn({
-    data: {
-      name: input.name,
-      email: input.email,
-      picture: input.picture,
-    },
-  });
+  const payload = {
+    name: input.name,
+    email: input.email,
+    picture: input.picture,
+  };
+  try {
+    const result = await postAuthJson<
+      Awaited<ReturnType<typeof oauthSignInFn>> | { error: string }
+    >("/api/auth/oauth", payload);
+    if (result && typeof result === "object" && "error" in result && !("email" in result)) {
+      throw new Error(String((result as { error: string }).error));
+    }
+    return result as Awaited<ReturnType<typeof oauthSignInFn>>;
+  } catch (apiError) {
+    try {
+      return await oauthSignInFn({ data: payload });
+    } catch {
+      throw apiError instanceof Error ? apiError : new Error("Sign-in failed.");
+    }
+  }
 }
 
 export async function inviteAdmin(actorEmail: string, inviteEmail: string) {

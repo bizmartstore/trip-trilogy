@@ -1,6 +1,14 @@
 import { createStart, createCsrfMiddleware, createMiddleware } from "@tanstack/react-start";
 
 import { renderErrorPage } from "./lib/error-page";
+import { syncEnvFromGlobal } from "./lib/worker-env";
+
+const envMiddleware = createMiddleware().server(async ({ next }) => {
+  // Nitro sets globalThis.__env__ before this runs; copy secrets into process.env
+  // so every server function / route sees NEXORA_SUPABASE_SERVICE_ROLE_KEY.
+  syncEnvFromGlobal();
+  return next();
+});
 
 const errorMiddleware = createMiddleware().server(async ({ next }) => {
   try {
@@ -25,5 +33,5 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  requestMiddleware: [errorMiddleware, csrfMiddleware],
+  requestMiddleware: [envMiddleware, errorMiddleware, csrfMiddleware],
 }));

@@ -30,7 +30,7 @@ export function supabaseConfigured() {
 }
 
 export function supabaseMissingConfigMessage() {
-  return "Account database is not connected. Set NEXORA_SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SERVICE_ROLE_KEY) on the Cloudflare Worker so sign-in works across devices.";
+  return "Account database is not connected. Set the secret NEXORA_SUPABASE_SERVICE_ROLE_KEY on the Cloudflare Worker (wrangler secret put NEXORA_SUPABASE_SERVICE_ROLE_KEY) and in Lovable → Cloud → Secrets, then republish. Use the service_role key from Supabase → Project Settings → API.";
 }
 
 async function rest(path: string, init: RequestInit = {}) {
