@@ -166,6 +166,24 @@ export async function listBookingRowsByReference(
   return fallback ?? [];
 }
 
+/** Scan the hub document JSON for a reservation when the bookings table is empty or unavailable. */
+export async function findBookingInHubDocument(
+  reference: string,
+): Promise<Record<string, unknown> | null> {
+  const ref = reference.trim().toLowerCase();
+  if (!ref) return null;
+  const rows = (await rest("hub_state?id=eq.main&select=data&limit=1")) as
+    | { data: { bookings?: Record<string, unknown>[] } }[]
+    | null;
+  const bookings = rows?.[0]?.data?.bookings;
+  if (!Array.isArray(bookings)) return null;
+  return (
+    bookings.find(
+      (row) => String(row.reference ?? "").trim().toLowerCase() === ref,
+    ) ?? null
+  );
+}
+
 /** Keep-alive ping — a tiny read that prevents the project from idling out. */
 export async function pingSupabase() {
   const started = Date.now();

@@ -1,23 +1,29 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { CalendarDays, CheckCircle2, MapPin, Phone, Users } from "lucide-react";
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { CalendarDays, CheckCircle2, Loader2, MapPin, Phone, Users } from "lucide-react";
 
 import { BookingQrCode } from "@/components/booking/booking-qr-code";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { getBookingByReference } from "@/lib/store.server";
+import { readCachedBookingConfirmation } from "@/lib/booking-cache";
 import { bookingStatusLabel } from "@/lib/booking-receipt";
+import { fetchBookingByReference } from "@/lib/api";
+import { getBookingByReference } from "@/lib/store.server";
 import { NEXORA_LOGO_SRC } from "@/lib/brand";
+import type { Booking } from "@/lib/types";
 import { peso } from "@/lib/utils";
+import { syncEnvFromGlobal } from "@/lib/worker-env";
 
 export const Route = createFileRoute("/booking/$reference")({
   loader: async ({ params }) => {
-    const booking = await getBookingByReference(params.reference);
-    if (!booking) throw notFound();
-    return { booking };
+    syncEnvFromGlobal();
+    const reference = decodeURIComponent(params.reference.trim());
+    const booking = await getBookingByReference(reference);
+    return { booking, reference };
   },
   head: ({ loaderData }) => {
-    const ref = loaderData?.booking.reference ?? "Booking";
+    const ref = loaderData?.booking?.reference ?? loaderData?.reference ?? "Booking";
     return {
       meta: [
         { title: `${ref} | Nexora reservation` },
@@ -26,24 +32,61 @@ export const Route = createFileRoute("/booking/$reference")({
       ],
     };
   },
-  notFoundComponent: () => (
-    <div className="container-x pt-32 pb-24 text-center">
-      <h1 className="text-2xl font-semibold">Booking not found</h1>
-      <p className="mt-2 text-muted-foreground">
-        This reference may be incorrect or the reservation was removed.
-      </p>
-      <Button asChild variant="outline" className="mt-6 rounded-full">
-        <Link to="/explore" search={{ kind: "all" }}>
-          Browse experiences
-        </Link>
-      </Button>
-    </div>
-  ),
   component: BookingConfirmationPage,
 });
 
 function BookingConfirmationPage() {
-  const { booking } = Route.useLoaderData();
+  const { booking: initialBooking, reference } = Route.useLoaderData();
+  const cached = readCachedBookingConfirmation(reference);
+
+  const query = useQuery({
+    queryKey: ["booking-confirmation", reference],
+    queryFn: async () => {
+      if (initialBooking) return initialBooking;
+      if (cached) return cached;
+      const remote = await fetchBookingByReference(reference);
+      if (remote) return remote;
+      const res = await fetch(`/api/public/booking/${encodeURIComponent(reference)}`, {
+        headers: { accept: "application/json" },
+      });
+      if (res.ok) {
+        const data = (await res.json()) as { booking?: Booking };
+        if (data.booking) return data.booking;
+      }
+      return null;
+    },
+    initialData: initialBooking ?? cached ?? undefined,
+    staleTime: 30_000,
+    retry: 1,
+  });
+
+  const booking = query.data;
+
+  if (query.isLoading && !booking) {
+    return (
+      <div className="container-x flex min-h-[50vh] items-center justify-center pt-28 pb-24">
+        <Loader2 className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!booking) {
+    return (
+      <div className="container-x pt-32 pb-24 text-center">
+        <h1 className="text-2xl font-semibold">Booking not found</h1>
+        <p className="mt-2 text-muted-foreground">
+          This reference may be incorrect or still syncing. If you just booked, wait a moment and
+          refresh — or contact our team with reference{" "}
+          <span className="font-mono font-medium text-foreground">{reference}</span>.
+        </p>
+        <Button asChild variant="outline" className="mt-6 rounded-full">
+          <Link to="/explore" search={{ kind: "all" }}>
+            Browse experiences
+          </Link>
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="pb-16 pt-28">
@@ -75,10 +118,7 @@ function BookingConfirmationPage() {
             <Detail label="Date" value={booking.date} icon={CalendarDays} />
             <Detail label="Guests" value={String(booking.guests)} icon={Users} />
             <Detail label="Total" value={peso(booking.total)} />
-            <Detail
-              label="Payment"
-              value={booking.paid ? "Paid" : "Pay on arrival"}
-            />
+            <Detail label="Payment" value={booking.paid ? "Paid" : "Pay on arrival"} />
             <div className="flex items-center justify-between gap-4 pt-1">
               <dt className="text-muted-foreground">Status</dt>
               <dd>

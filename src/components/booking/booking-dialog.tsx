@@ -6,10 +6,12 @@ import {
   CheckCircle2,
   Download,
   ExternalLink,
+  Heart,
   Loader2,
   LogIn,
   MessageSquare,
   Phone,
+  Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -50,6 +52,7 @@ import {
   generateBookingQrDataUrl,
 } from "@/lib/booking-receipt";
 import { bookingConfirmationPath } from "@/lib/booking-url";
+import { cacheBookingConfirmation } from "@/lib/booking-cache";
 import type { Booking, Listing } from "@/lib/types";
 import { peso } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -80,7 +83,7 @@ export function BookingDialog({
 }) {
   const [confirmed, setConfirmed] = useState<Booking | null>(null);
   const [downloading, setDownloading] = useState(false);
-  const { user } = useAuth();
+  const { user, ready } = useAuth();
   const settings = useQuery({ queryKey: ["hub-settings"], queryFn: fetchSettings });
 
   const form = useForm<FormValues>({
@@ -120,6 +123,7 @@ export function BookingDialog({
         notifyPreference: values.notifyPreference,
       }),
     onSuccess: (booking) => {
+      cacheBookingConfirmation(booking);
       setConfirmed(booking);
       toast.success("Booking submitted", {
         description: `Reference ${booking.reference} — awaiting admin approval.`,
@@ -221,17 +225,47 @@ export function BookingDialog({
               </dl>
             </div>
 
-            {!user ? (
-              <div className="mt-4 rounded-3xl border border-primary/20 bg-primary/5 p-5 text-left">
-                <p className="text-sm font-semibold">Sign in to unlock the full app</p>
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  Create a free account or sign in to track this reservation, get approval updates,
-                  save favourites, and manage all your Palawan trips in one place.
-                </p>
-                <Button asChild variant="hero" className="mt-4 w-full rounded-full">
+            {!user && ready ? (
+              <div className="mt-4 overflow-hidden rounded-3xl border border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent p-5 text-left shadow-sm">
+                <div className="flex items-start gap-3">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-primary/15 text-primary">
+                    <Sparkles className="size-5" />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold">Get the full Nexora experience — free</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Sign in or create an account to unlock everything travellers love about Nexora.
+                    </p>
+                  </div>
+                </div>
+                <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="size-4 shrink-0 text-primary" />
+                    Track this booking and approval updates live
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <Heart className="size-4 shrink-0 text-primary" />
+                    Save favourite tours, stays, and restaurants
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CalendarDays className="size-4 shrink-0 text-primary" />
+                    Manage all your Palawan trips in one dashboard
+                  </li>
+                </ul>
+                <Button asChild variant="hero" className="mt-5 w-full rounded-full">
                   <Link to="/auth">
-                    <LogIn className="size-4" /> Sign in or sign up
+                    <LogIn className="size-4" /> Sign in or create free account
                   </Link>
+                </Button>
+              </div>
+            ) : user ? (
+              <div className="mt-4 rounded-3xl border border-border bg-card p-4 text-left text-sm">
+                <p className="font-semibold">You&apos;re signed in</p>
+                <p className="mt-1 text-muted-foreground">
+                  View and manage this reservation anytime from your dashboard.
+                </p>
+                <Button asChild variant="outline" size="sm" className="mt-3 rounded-full">
+                  <Link to="/dashboard">Open my dashboard</Link>
                 </Button>
               </div>
             ) : null}

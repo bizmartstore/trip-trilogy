@@ -8,6 +8,7 @@ import { destinations as seedDestinations, listings as seedListings } from "@/da
 import { isMainAdminEmail, normalizeEmail } from "@/lib/constants";
 import {
   deleteDemoBookingRows,
+  findBookingInHubDocument,
   listAllBookingRows,
   listBookingRows,
   listBookingRowsByEmail,
@@ -90,30 +91,30 @@ function sanitizeDemoBookings(bookings: Booking[]) {
 }
 
 function rowToBooking(row: Record<string, unknown>, listings: Listing[]): Booking {
-  const listingId = String(row["listing_id"] ?? "");
+  const listingId = String(row["listing_id"] ?? row["listingId"] ?? "");
   const listing = listings.find((l) => l.id === listingId);
   return {
     id: String(row["id"]),
     reference: String(row["reference"] ?? ""),
     listingId,
-    listingTitle: String(row["listing_title"] ?? ""),
+    listingTitle: String(row["listing_title"] ?? row["listingTitle"] ?? ""),
     kind: String(row["kind"] ?? "tour") as ListingKind,
-    image: listing?.images[0] ?? "",
+    image: String(row["image"] ?? listing?.images[0] ?? ""),
     guests: Number(row["guests"] ?? 1),
     date: String(row["date"] ?? ""),
     total: Number(row["total"] ?? 0),
     status: String(row["status"] ?? "pending") as BookingStatus,
     paid: Boolean(row["paid"]),
     customer: String(row["customer"] ?? ""),
-    customerEmail: (row["customer_email"] as string | null) ?? undefined,
-    customerPhone: (row["customer_phone"] as string | null) ?? undefined,
-    notifyPreference: (row["notify_preference"] as NotifyPreference | null) ?? undefined,
-    createdAt: String(row["created_at"] ?? ""),
-    statusUpdatedAt: (row["status_updated_at"] as string | null) ?? undefined,
-    approvedAt: (row["approved_at"] as string | null) ?? undefined,
-    rejectedAt: (row["rejected_at"] as string | null) ?? undefined,
-    statusBy: (row["status_by"] as string | null) ?? undefined,
-    adminNote: (row["admin_note"] as string | null) ?? undefined,
+    customerEmail: (row["customer_email"] as string | null | undefined) ?? (row["customerEmail"] as string | undefined),
+    customerPhone: (row["customer_phone"] as string | null | undefined) ?? (row["customerPhone"] as string | undefined),
+    notifyPreference: (row["notify_preference"] as NotifyPreference | null | undefined) ?? (row["notifyPreference"] as NotifyPreference | undefined),
+    createdAt: String(row["created_at"] ?? row["createdAt"] ?? ""),
+    statusUpdatedAt: (row["status_updated_at"] as string | null | undefined) ?? (row["statusUpdatedAt"] as string | undefined),
+    approvedAt: (row["approved_at"] as string | null | undefined) ?? (row["approvedAt"] as string | undefined),
+    rejectedAt: (row["rejected_at"] as string | null | undefined) ?? (row["rejectedAt"] as string | undefined),
+    statusBy: (row["status_by"] as string | null | undefined) ?? (row["statusBy"] as string | undefined),
+    adminNote: (row["admin_note"] as string | null | undefined) ?? (row["adminNote"] as string | undefined),
   };
 }
 
@@ -200,14 +201,14 @@ function getMemory(): HubState {
 let hydratePromise: Promise<void> | null = null;
 
 function applyRemote(parsed: Partial<HubState> | null) {
-  if (!parsed?.listings || !parsed?.bookings) return;
+  if (!parsed?.listings) return;
   const listings = structuredClone(parsed.listings);
   sanitizeSeedReviews(listings);
   const g = globalThis as GlobalStore;
   g[GLOBAL_KEY] = {
     revision: parsed.revision ?? 1,
     listings,
-    bookings: sanitizeDemoBookings(parsed.bookings),
+    bookings: sanitizeDemoBookings(parsed.bookings ?? []),
     destinations: parsed.destinations?.length
       ? parsed.destinations
       : structuredClone(seedDestinations),
@@ -700,6 +701,9 @@ export async function createBookingRecord(input: {
   customerPhone?: string;
   notifyPreference?: NotifyPreference;
 }): Promise<Booking> {
+  const { syncEnvFromGlobal } = await import("@/lib/worker-env");
+  syncEnvFromGlobal();
+
   const state = await ensureStore();
   const listing = state.listings.find((l) => l.id === input.listingId);
   if (!listing) throw new Error("Listing not found");
@@ -770,6 +774,7 @@ async function mirrorBooking(booking: Booking, required = false) {
       created_at: booking.createdAt ?? new Date().toISOString(),
     });
   } catch (err) {
+    console.error("[booking] mirror failed:", booking.reference, err);
     if (required) {
       throw err instanceof Error ? err : new Error("Could not save booking to database.");
     }
@@ -923,24 +928,35 @@ async function refreshStoreBookings() {
 
 /** Public lookup for QR confirmation pages and receipts. */
 export async function getBookingByReference(reference: string): Promise<Booking | null> {
+  const { syncEnvFromGlobal } = await import("@/lib/worker-env");
+  syncEnvFromGlobal();
+
   await ensureStore();
   await refreshStoreBookings();
   const state = getMemory();
   const ref = decodeURIComponent(reference.trim());
   if (!ref) return null;
+  const refKey = ref.toLowerCase();
 
   if (supabaseConfigured()) {
     try {
       const rows = await listBookingRowsByReference(ref);
       if (rows[0]) return rowToBooking(rows[0], state.listings);
-    } catch {
-      // fall through
+    } catch (error) {
+      console.error("[booking] table lookup failed:", error);
+    }
+
+    try {
+      const hubRow = await findBookingInHubDocument(ref);
+      if (hubRow) return rowToBooking(hubRow, state.listings);
+    } catch (error) {
+      console.error("[booking] hub document lookup failed:", error);
     }
   }
 
   return (
     sanitizeDemoBookings(state.bookings).find(
-      (b) => b.reference.toLowerCase() === ref.toLowerCase(),
+      (b) => b.reference.toLowerCase() === refKey,
     ) ?? null
   );
 }
