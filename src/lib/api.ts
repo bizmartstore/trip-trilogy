@@ -250,12 +250,18 @@ export async function signInAccount(input: { email: string; password: string }) 
 }
 
 export async function oauthSignIn(input: {
-  idToken: string;
-  name?: string;
-  email?: string;
+  idToken?: string;
+  name: string;
+  email: string;
   picture?: string;
 }) {
-  return oauthSignInFn({ data: input });
+  return oauthSignInFn({
+    data: {
+      name: input.name,
+      email: input.email,
+      picture: input.picture,
+    },
+  });
 }
 
 export async function inviteAdmin(actorEmail: string, inviteEmail: string) {

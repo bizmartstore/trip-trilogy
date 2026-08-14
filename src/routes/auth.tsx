@@ -97,10 +97,6 @@ function Auth() {
           toast.error(result.error);
           return;
         }
-        if (result.needsConfirmation) {
-          toast.success("Account created. Confirm the email we sent, then sign in.");
-          return;
-        }
         afterAuth(result.account);
       } else {
         const values = signIn.getValues();

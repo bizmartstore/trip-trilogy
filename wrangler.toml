@@ -1,0 +1,17 @@
+# Cloudflare Worker deploy for Nexora (TanStack Start + Nitro).
+# Secrets (do not put these in this file):
+#   wrangler secret put NEXORA_SUPABASE_SERVICE_ROLE_KEY
+#   wrangler secret put GOOGLE_OAUTH_CLIENT_ID
+name = "trip-trilogy"
+main = ".output/server/index.mjs"
+compatibility_date = "2026-08-14"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".output/public"
+binding = "ASSETS"
+
+[vars]
+NEXORA_SUPABASE_URL = "https://aeynekfhnzjcimskwouw.supabase.co"
+SUPABASE_URL = "https://aeynekfhnzjcimskwouw.supabase.co"
+VITE_SUPABASE_URL = "https://aeynekfhnzjcimskwouw.supabase.co"

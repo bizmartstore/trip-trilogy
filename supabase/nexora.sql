@@ -57,9 +57,12 @@ create table if not exists public.accounts (
   picture text,
   notify_preference text default 'call',
   contact_number text,
+  password_hash text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.accounts add column if not exists password_hash text;
 
 create index if not exists accounts_role_idx on public.accounts (role);
 

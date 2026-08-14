@@ -7,14 +7,17 @@
 import { destinations as seedDestinations, demoBookings, listings as seedListings } from "@/data/catalog";
 import { isMainAdminEmail, normalizeEmail } from "@/lib/constants";
 import {
+  listBookingRows,
+  readAccountRow,
   readHubDocument,
   readHubRevision,
-  listBookingRows,
   supabaseConfigured,
+  supabaseMissingConfigMessage,
   upsertAccountRow,
   upsertBookingRow,
   writeHubDocument,
 } from "@/lib/supabase-rest.server";
+import { keepAlive } from "@/lib/worker-env";
 import type {
   Booking,
   BookingStatus,
@@ -42,7 +45,6 @@ const GLOBAL_KEY = "__nexora_store_v1__";
 
 type GlobalStore = typeof globalThis & {
   [GLOBAL_KEY]?: HubState;
-  __nexora_persist_timer?: ReturnType<typeof setTimeout>;
 };
 
 export const defaultSettings: HubSettings = {
@@ -108,22 +110,10 @@ async function hydrateFromRemote() {
   }
 }
 
-function schedulePersist() {
-  const g = globalThis as GlobalStore;
-  if (g.__nexora_persist_timer) clearTimeout(g.__nexora_persist_timer);
-  g.__nexora_persist_timer = setTimeout(() => {
-    void persistToRemote();
-  }, 250);
-}
-
 async function persistToRemote() {
   if (!supabaseConfigured()) return;
-  try {
-    const state = getMemory();
-    await writeHubDocument(state, state.revision);
-  } catch {
-    // Keep serving from memory; the next mutation retries the write.
-  }
+  const state = getMemory();
+  await writeHubDocument(state, state.revision);
 }
 
 export async function ensureStore(): Promise<HubState> {
@@ -134,7 +124,14 @@ export async function ensureStore(): Promise<HubState> {
 
 function bump(state: HubState) {
   state.revision += 1;
-  schedulePersist();
+  // Cloudflare Workers freeze the isolate when the response is sent, so a
+  // delayed setTimeout write often never runs. Persist now and keepAlive.
+  keepAlive(persistToRemote().catch(() => undefined));
+}
+
+async function bumpAndWait(state: HubState) {
+  state.revision += 1;
+  if (supabaseConfigured()) await persistToRemote();
 }
 
 export async function getRevision() {
@@ -181,12 +178,100 @@ export function resolveRole(email: string, invites: string[]): "tourist" | "admi
   return "tourist";
 }
 
-export async function hashPassword(password: string) {
-  const data = new TextEncoder().encode(`nexora:${password}`);
+const HASH_PEPPERS = ["nexora:", "explorehub:"] as const;
+
+export async function hashPassword(password: string, pepper: string = HASH_PEPPERS[0]) {
+  const data = new TextEncoder().encode(`${pepper}${password}`);
   const digest = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(digest))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+async function passwordMatches(password: string, storedHash: string) {
+  if (!storedHash) return false;
+  for (const pepper of HASH_PEPPERS) {
+    if ((await hashPassword(password, pepper)) === storedHash) return true;
+  }
+  return false;
+}
+
+function accountFromRow(row: Record<string, unknown>): HubAccount | null {
+  const email = normalizeEmail(String(row.email ?? ""));
+  if (!email) return null;
+  const notify = row.notify_preference;
+  return {
+    email,
+    name: String(row.name ?? email.split("@")[0]),
+    passwordHash: typeof row.password_hash === "string" ? row.password_hash : "",
+    role: row.role === "admin" ? "admin" : "tourist",
+    picture: typeof row.picture === "string" && row.picture ? row.picture : undefined,
+    createdAt: String(row.created_at ?? new Date().toISOString()),
+    notifyPreference:
+      notify === "call" || notify === "sms" || notify === "email" || notify === "any"
+        ? notify
+        : undefined,
+    contactNumber:
+      typeof row.contact_number === "string" && row.contact_number
+        ? row.contact_number
+        : undefined,
+  };
+}
+
+function rememberAccount(account: HubAccount) {
+  const state = getMemory();
+  const idx = state.accounts.findIndex((row) => row.email === account.email);
+  if (idx >= 0) {
+    const previous = state.accounts[idx];
+    state.accounts[idx] = {
+      ...previous,
+      ...account,
+      passwordHash: account.passwordHash || previous.passwordHash,
+    };
+    return state.accounts[idx];
+  }
+  state.accounts.push(account);
+  return account;
+}
+
+/** Pull the latest hub_state, then the accounts table, so other devices are visible. */
+async function findAccount(email: string): Promise<HubAccount | undefined> {
+  await ensureStore();
+  if (supabaseConfigured()) {
+    try {
+      const doc = await readHubDocument<Partial<HubState>>();
+      if (doc) {
+        const memory = getMemory();
+        const hasLocal = memory.accounts.some((account) => account.email === email);
+        // Always take remote when this isolate does not have the email, even if
+        // a failed persist left a higher local revision.
+        if (doc.revision >= memory.revision || !hasLocal) {
+          applyRemote({ ...doc.data, revision: doc.revision });
+        }
+      }
+    } catch {
+      // Fall through to the accounts table lookup.
+    }
+  }
+
+  const local = getMemory().accounts.find((account) => account.email === email);
+  if (local?.passwordHash) return local;
+  if (!supabaseConfigured()) return local;
+
+  try {
+    const row = await readAccountRow(email);
+    if (!row) return local;
+    const fromRow = accountFromRow(row);
+    if (!fromRow) return local;
+    return rememberAccount({
+      ...fromRow,
+      passwordHash: fromRow.passwordHash || local?.passwordHash || "",
+      name: fromRow.name || local?.name || email.split("@")[0],
+      picture: fromRow.picture || local?.picture,
+    });
+  } catch {
+    return local;
+  }
 }
 
 function slugify(title: string) {
@@ -202,24 +287,35 @@ export async function registerAccount(input: {
   email: string;
   password: string;
 }): Promise<{ ok: true; account: Omit<HubAccount, "passwordHash"> } | { ok: false; error: string }> {
+  if (!supabaseConfigured()) {
+    return { ok: false, error: supabaseMissingConfigMessage() };
+  }
   const state = await ensureStore();
   const email = normalizeEmail(input.email);
-  if (state.accounts.some((a) => a.email === email)) {
+  const existing = await findAccount(email);
+  if (existing?.passwordHash) {
     return { ok: false, error: "An account with this email already exists. Sign in instead." };
   }
   const role = resolveRole(email, state.adminInvites);
   const account: HubAccount = {
     email,
-    name: input.name.trim(),
+    name: input.name.trim() || existing?.name || email.split("@")[0],
     passwordHash: await hashPassword(input.password),
     role,
-    createdAt: new Date().toISOString(),
+    picture: existing?.picture,
+    createdAt: existing?.createdAt ?? new Date().toISOString(),
+    notifyPreference: existing?.notifyPreference,
+    contactNumber: existing?.contactNumber,
   };
-  state.accounts.push(account);
+  rememberAccount(account);
   if (role === "admin" && !isMainAdminEmail(email)) {
     state.adminInvites = state.adminInvites.filter((e) => e !== email);
   }
-  bump(state);
+  try {
+    await bumpAndWait(state);
+  } catch {
+    return { ok: false, error: "Could not save your account to Supabase. Try again." };
+  }
   await mirrorAccount(account);
   const { passwordHash: _, ...safe } = account;
   return { ok: true, account: safe };
@@ -229,23 +325,34 @@ export async function signInAccount(input: {
   email: string;
   password: string;
 }): Promise<{ ok: true; account: Omit<HubAccount, "passwordHash"> } | { ok: false; error: string }> {
-  const state = await ensureStore();
   const email = normalizeEmail(input.email);
-  const existing = state.accounts.find((a) => a.email === email);
+  const existing = await findAccount(email);
   if (!existing) {
-    return { ok: false, error: "No account found for that email. Create an account first." };
+    return {
+      ok: false,
+      error: supabaseConfigured()
+        ? "No account found for that email. Create an account first."
+        : supabaseMissingConfigMessage(),
+    };
   }
-  const hash = await hashPassword(input.password);
-  if (hash !== existing.passwordHash) {
+  if (!existing.passwordHash) {
+    return {
+      ok: false,
+      error:
+        "This email is registered but has no password saved yet. Use Create account with the same email to finish setup.",
+    };
+  }
+  if (!(await passwordMatches(input.password, existing.passwordHash))) {
     return { ok: false, error: "Incorrect password." };
   }
+  const state = getMemory();
   const role = resolveRole(email, state.adminInvites);
   if (existing.role !== role) {
     existing.role = role;
     if (role === "admin" && !isMainAdminEmail(email)) {
       state.adminInvites = state.adminInvites.filter((e) => e !== email);
     }
-    bump(state);
+    await bumpAndWait(state);
   }
   await mirrorAccount(existing);
   const { passwordHash: _, ...safe } = existing;
@@ -257,10 +364,13 @@ export async function upsertOAuthAccount(input: {
   email: string;
   picture?: string;
 }): Promise<Omit<HubAccount, "passwordHash">> {
+  if (!supabaseConfigured()) {
+    throw new Error(supabaseMissingConfigMessage());
+  }
   const state = await ensureStore();
   const email = normalizeEmail(input.email);
   const role = resolveRole(email, state.adminInvites);
-  let account = state.accounts.find((a) => a.email === email);
+  let account = await findAccount(email);
   if (!account) {
     account = {
       email,
@@ -270,16 +380,16 @@ export async function upsertOAuthAccount(input: {
       picture: input.picture,
       createdAt: new Date().toISOString(),
     };
-    state.accounts.push(account);
   } else {
     account.name = input.name.trim() || account.name;
     account.picture = input.picture ?? account.picture;
     account.role = role;
   }
+  rememberAccount(account);
   if (role === "admin" && !isMainAdminEmail(email)) {
     state.adminInvites = state.adminInvites.filter((e) => e !== email);
   }
-  bump(state);
+  await bumpAndWait(state);
   await mirrorAccount(account);
   const { passwordHash: _, ...safe } = account;
   return safe;
@@ -498,6 +608,7 @@ async function mirrorAccount(account: HubAccount) {
       picture: account.picture ?? null,
       notify_preference: account.notifyPreference ?? "call",
       contact_number: account.contactNumber ?? null,
+      password_hash: account.passwordHash || null,
       created_at: account.createdAt,
       updated_at: new Date().toISOString(),
     });
