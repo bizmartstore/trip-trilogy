@@ -70,13 +70,28 @@ function copyStringsToProcess(env: EnvMap) {
 }
 
 /**
+ * Resolve Worker bindings when Nitro only passes the Request (env/ctx omitted).
+ * Nitro sets globalThis.__env__ before routing; fall back to that when needed.
+ */
+export function resolveWorkerBindings(env: unknown): EnvMap | null {
+  if (env && typeof env === "object" && !isExecutionContext(env)) {
+    return env as EnvMap;
+  }
+  const fromGlobal = cloudflareEnv();
+  if (fromGlobal) return fromGlobal;
+  if (env && typeof env === "object") return env as EnvMap;
+  return null;
+}
+
+/**
  * Bind the current request's Worker env (call once at the top of fetch()).
  * This is the only reliable way to read wrangler secrets on Cloudflare.
  */
 export function bindWorkerEnv(env: unknown) {
-  if (!env || typeof env !== "object") return;
-  activeBindings = env as EnvMap;
-  applyCloudflareEnv(env);
+  const bindings = resolveWorkerBindings(env);
+  if (!bindings) return;
+  activeBindings = bindings;
+  applyCloudflareEnv(bindings);
 }
 
 /**

@@ -4,22 +4,33 @@
  */
 import { allTags } from "@/data/catalog";
 import {
+  addListingReviewFn,
   addTestimonialFn,
   bookingFeedFn,
+  broadcastNotificationFn,
   createBookingFn,
   createListingFn,
   deleteListingFn,
   deleteTestimonialFn,
+  fetchAdminBookingsFn,
+  fetchBookingByReferenceFn,
+  fetchBookingsForEmailFn,
   fetchHubSnapshotFn,
   fetchRevisionFn,
   fetchSettingsFn,
   inviteAdminFn,
   listAdminsFn,
+  listFavoritesFn,
+  listNotificationsFn,
+  markAllNotificationsReadFn,
+  markNotificationReadFn,
   oauthSignInFn,
   registerFn,
   removeAdminInviteFn,
+  removeListingReviewFn,
   searchListingsFn,
   signInFn,
+  toggleFavoriteFn,
   updateBookingStatusFn,
   updateListingFn,
   updateNotifyPrefsFn,
@@ -28,12 +39,14 @@ import {
 import type {
   Booking,
   NotifyPreference,
+  HubNotification,
   HubSettings,
   BookingStatus,
   Destination,
   Listing,
   ListingInput,
   ListingKind,
+  Review,
   SearchFilters,
   Testimonial,
 } from "@/lib/types";
@@ -122,14 +135,16 @@ export async function fetchBookings(): Promise<Booking[]> {
   return s.bookings;
 }
 
+export async function fetchAdminBookings(): Promise<Booking[]> {
+  return fetchAdminBookingsFn();
+}
+
 export async function fetchBookingsForEmail(email: string): Promise<Booking[]> {
-  const s = await snapshot(true);
-  const e = email.trim().toLowerCase();
-  return s.bookings.filter(
-    (b) =>
-      b.customerEmail?.toLowerCase() === e ||
-      b.customer.toLowerCase() === e.split("@")[0].toLowerCase(),
-  );
+  return fetchBookingsForEmailFn({ data: { email } });
+}
+
+export async function fetchBookingByReference(reference: string): Promise<Booking | null> {
+  return fetchBookingByReferenceFn({ data: { reference } });
 }
 
 export interface CreateBookingInput {
@@ -325,4 +340,61 @@ export async function updateSettings(actorEmail: string, patch: Partial<HubSetti
   const settings = await updateSettingsFn({ data: { actorEmail, patch } });
   invalidateApiCache();
   return settings;
+}
+
+export async function submitListingReview(input: {
+  email: string;
+  name: string;
+  listingId: string;
+  rating: number;
+  body: string;
+}): Promise<Review> {
+  const review = await addListingReviewFn({ data: input });
+  invalidateApiCache();
+  return review;
+}
+
+export async function removeListingReview(
+  actorEmail: string,
+  listingId: string,
+  reviewId: string,
+) {
+  const result = await removeListingReviewFn({ data: { actorEmail, listingId, reviewId } });
+  invalidateApiCache();
+  return result;
+}
+
+export async function toggleFavorite(email: string, listingId: string) {
+  const result = await toggleFavoriteFn({ data: { email, listingId } });
+  invalidateApiCache();
+  return result;
+}
+
+export async function fetchFavorites(email: string): Promise<Listing[]> {
+  return listFavoritesFn({ data: { email } });
+}
+
+export async function fetchNotifications(email: string): Promise<HubNotification[]> {
+  return listNotificationsFn({ data: { email } });
+}
+
+export async function markNotificationRead(email: string, id: string) {
+  const note = await markNotificationReadFn({ data: { email, id } });
+  invalidateApiCache();
+  return note;
+}
+
+export async function markAllNotificationsRead(email: string) {
+  const result = await markAllNotificationsReadFn({ data: { email } });
+  invalidateApiCache();
+  return result;
+}
+
+export async function broadcastNotification(
+  actorEmail: string,
+  input: { title: string; body: string; link?: string; targetEmail?: string },
+) {
+  const result = await broadcastNotificationFn({ data: { actorEmail, ...input } });
+  invalidateApiCache();
+  return result;
 }

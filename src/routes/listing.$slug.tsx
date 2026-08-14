@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import {
   BadgeCheck,
@@ -20,6 +20,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { ListingCard } from "@/components/listings/listing-card";
+import { ReviewForm } from "@/components/listings/review-form";
 import { BookingDialog } from "@/components/booking/booking-dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
@@ -27,9 +28,10 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchListingBySlug, fetchRelated } from "@/lib/api";
+import { fetchFavorites, fetchListingBySlug, fetchRelated, toggleFavorite } from "@/lib/api";
 import type { Listing } from "@/lib/types";
 import { peso } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/listing/$slug")({
   loader: async ({ params }) => {
@@ -74,16 +76,43 @@ export const Route = createFileRoute("/listing/$slug")({
 });
 
 function ListingDetail() {
-  const { listing } = Route.useLoaderData() as { listing: Listing };
+  const { listing: initialListing } = Route.useLoaderData() as { listing: Listing };
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [guests, setGuests] = useState(2);
-  const [saved, setSaved] = useState(false);
   const [open, setOpen] = useState(false);
+
+  const listingQuery = useQuery({
+    queryKey: ["listing", initialListing.slug],
+    queryFn: () => fetchListingBySlug(initialListing.slug),
+    initialData: initialListing,
+  });
+  const listing = listingQuery.data ?? initialListing;
+
+  const favorites = useQuery({
+    queryKey: ["favorites", user?.email],
+    queryFn: () => fetchFavorites(user!.email),
+    enabled: !!user,
+  });
+  const saved = favorites.data?.some((l) => l.id === listing.id) ?? false;
+
+  const save = useMutation({
+    mutationFn: () => toggleFavorite(user!.email, listing.id),
+    onSuccess: (result) => {
+      toast.success(result.saved ? "Saved to favourites" : "Removed from favourites");
+      void favorites.refetch();
+    },
+    onError: () => toast.error("Sign in to save listings"),
+  });
 
   const related = useQuery({
     queryKey: ["related", listing.id],
     queryFn: () => fetchRelated(listing),
   });
+
+  const userReview = user
+    ? listing.reviews?.some((r) => r.email === user.email.toLowerCase())
+    : false;
 
   const unitPrice = listing.discountPct
     ? Math.round(listing.price * (1 - listing.discountPct / 100))
@@ -123,7 +152,14 @@ function ListingDetail() {
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <Star className="size-4 fill-gold text-gold" />
-                <strong className="text-foreground">{listing.rating}</strong> ({listing.reviewCount} reviews)
+                {listing.reviewCount ? (
+                  <>
+                    <strong className="text-foreground">{listing.rating}</strong> ({listing.reviewCount}{" "}
+                    reviews)
+                  </>
+                ) : (
+                  <span className="text-foreground">No ratings yet</span>
+                )}
               </span>
               <span className="flex items-center gap-1.5">
                 <MapPin className="size-4" /> {listing.destination}, {listing.country}
@@ -142,8 +178,11 @@ function ListingDetail() {
                 variant="outline"
                 className="rounded-full"
                 onClick={() => {
-                  setSaved((s) => !s);
-                  toast.success(saved ? "Removed from favourites" : "Saved to favourites");
+                  if (!user) {
+                    toast.error("Sign in to save listings");
+                    return;
+                  }
+                  save.mutate();
                 }}
               >
                 <Heart className={saved ? "size-4 fill-destructive text-destructive" : "size-4"} />
@@ -281,45 +320,65 @@ function ListingDetail() {
                 <MapPanel listing={listing} />
               </TabsContent>
 
-              <TabsContent value="reviews" className="mt-8">
+              <TabsContent value="reviews" className="mt-8 space-y-6">
                 <div className="flex flex-wrap items-center gap-6 rounded-3xl border border-border bg-card p-6">
                   <div className="text-center">
-                    <p className="font-display text-5xl font-semibold">{listing.rating}</p>
-                    <div className="mt-1 flex justify-center gap-0.5">
-                      {Array.from({ length: 5 }).map((_, i) => (
-                        <Star key={i} className="size-3.5 fill-gold text-gold" />
-                      ))}
-                    </div>
-                    <p className="mt-1 text-xs text-muted-foreground">{listing.reviewCount} reviews</p>
+                    <p className="font-display text-5xl font-semibold">
+                      {listing.reviewCount ? listing.rating : "—"}
+                    </p>
+                    {listing.reviewCount ? (
+                      <>
+                        <div className="mt-1 flex justify-center gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star
+                              key={i}
+                              className={`size-3.5 ${i < Math.round(listing.rating) ? "fill-gold text-gold" : "text-muted-foreground/30"}`}
+                            />
+                          ))}
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground">{listing.reviewCount} reviews</p>
+                      </>
+                    ) : (
+                      <p className="mt-1 text-xs text-muted-foreground">Be the first to rate</p>
+                    )}
                   </div>
                   <Separator orientation="vertical" className="hidden h-16 sm:block" />
                   <p className="min-w-0 flex-1 text-sm text-muted-foreground">
-                    Guests consistently praise the organisation, the guide's local knowledge and the
-                    value for money. Reviews are only accepted from travellers with a completed
-                    booking.
+                    Ratings come from signed-in travellers. Admins may remove reviews that violate
+                    community guidelines.
                   </p>
                 </div>
 
-                <div className="mt-6 space-y-4">
-                  {listing.reviews?.map((r) => (
-                    <div key={r.id} className="rounded-3xl border border-border bg-card p-6">
-                      <div className="flex items-center gap-3">
-                        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-                          {r.avatar}
-                        </span>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold">{r.author}</p>
-                          <p className="text-xs text-muted-foreground">{r.date}</p>
+                <ReviewForm
+                  listingId={listing.id}
+                  existingReview={!!userReview}
+                  onSubmitted={() => void listingQuery.refetch()}
+                />
+
+                <div className="space-y-4">
+                  {listing.reviews?.length ? (
+                    listing.reviews.map((r) => (
+                      <div key={r.id} className="rounded-3xl border border-border bg-card p-6">
+                        <div className="flex items-center gap-3">
+                          <span className="grid size-10 shrink-0 place-items-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                            {r.avatar}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold">{r.author}</p>
+                            <p className="text-xs text-muted-foreground">{r.date}</p>
+                          </div>
+                          <span className="ml-auto flex shrink-0 gap-0.5">
+                            {Array.from({ length: r.rating }).map((_, i) => (
+                              <Star key={i} className="size-3.5 fill-gold text-gold" />
+                            ))}
+                          </span>
                         </div>
-                        <span className="ml-auto flex shrink-0 gap-0.5">
-                          {Array.from({ length: r.rating }).map((_, i) => (
-                            <Star key={i} className="size-3.5 fill-gold text-gold" />
-                          ))}
-                        </span>
+                        <p className="mt-4 text-sm leading-relaxed text-foreground/90">{r.body}</p>
                       </div>
-                      <p className="mt-4 text-sm leading-relaxed text-foreground/90">{r.body}</p>
-                    </div>
-                  ))}
+                    ))
+                  ) : (
+                    <p className="text-center text-sm text-muted-foreground">No reviews yet.</p>
+                  )}
                 </div>
               </TabsContent>
 

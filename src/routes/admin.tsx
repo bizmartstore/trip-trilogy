@@ -15,6 +15,7 @@ import { toast } from "sonner";
 
 import { ContactSettings } from "@/components/admin/contact-settings";
 import { LiveBookingFeed } from "@/components/admin/live-booking-feed";
+import { NotificationBroadcast } from "@/components/admin/notification-broadcast";
 import { RevenuePanel } from "@/components/admin/revenue-panel";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
@@ -51,11 +52,12 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   createListing,
   deleteListing,
+  fetchAdminBookings,
   fetchAllListingsAdmin,
-  fetchBookings,
   inviteAdmin,
   listAdmins,
   removeAdminInvite,
+  removeListingReview,
   updateBookingStatus,
   updateListing,
 } from "@/lib/api";
@@ -116,9 +118,11 @@ function Admin() {
   }, [ready, user, isAdmin, navigate]);
 
   const bookings = useQuery({
-    queryKey: ["bookings"],
-    queryFn: fetchBookings,
+    queryKey: ["admin-bookings"],
+    queryFn: fetchAdminBookings,
     enabled: !!isAdmin,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
   });
   const listings = useQuery({
     queryKey: ["admin-listings"],
@@ -153,16 +157,26 @@ function Admin() {
       note?: string;
     }) => updateBookingStatus(id, status, { note, actorEmail: user?.email }),
     onSuccess: (result) => {
-      qc.setQueryData<Booking[]>(["bookings"], (old) =>
+      qc.setQueryData<Booking[]>(["admin-bookings"], (old) =>
         old?.map((b) => (b.id === result.id ? { ...b, ...result } : b)),
       );
-      void qc.invalidateQueries({ queryKey: ["bookings"] });
+      void qc.invalidateQueries({ queryKey: ["admin-bookings"] });
       void qc.invalidateQueries({ queryKey: ["booking-feed"] });
       setReview(null);
       setReviewNote("");
       toast.success(`Booking ${result.status}`);
     },
     onError: () => toast.error("Could not update booking"),
+  });
+
+  const removeReview = useMutation({
+    mutationFn: ({ listingId, reviewId }: { listingId: string; reviewId: string }) =>
+      removeListingReview(user!.email, listingId, reviewId),
+    onSuccess: () => {
+      toast.success("Review removed");
+      void qc.invalidateQueries({ queryKey: ["admin-listings"] });
+    },
+    onError: () => toast.error("Could not remove review"),
   });
 
   const [editorOpen, setEditorOpen] = useState(false);
@@ -357,6 +371,9 @@ function Admin() {
               <TabsTrigger value="contact" className="rounded-full">
                 Contact details
               </TabsTrigger>
+              <TabsTrigger value="messages" className="rounded-full">
+                Messages
+              </TabsTrigger>
               <TabsTrigger value="admins" className="rounded-full">
                 Admins
               </TabsTrigger>
@@ -475,42 +492,78 @@ function Admin() {
                 : listings.data?.map((l) => (
                     <div
                       key={l.id}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-2xl border border-border p-4"
+                      className="rounded-2xl border border-border p-4"
                     >
-                      <div className="flex min-w-0 items-center gap-4">
-                        <img
-                          src={l.images[0]}
-                          alt=""
-                          className="size-14 shrink-0 rounded-xl object-cover"
-                        />
-                        <div className="min-w-0">
-                          <p className="truncate font-semibold">{l.title}</p>
-                          <p className="truncate text-sm text-muted-foreground">
-                            {l.kind} · {l.destination} · {peso(l.price)}
-                          </p>
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+                        <div className="flex min-w-0 items-center gap-4">
+                          <img
+                            src={l.images[0]}
+                            alt=""
+                            className="size-14 shrink-0 rounded-xl object-cover"
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold">{l.title}</p>
+                            <p className="truncate text-sm text-muted-foreground">
+                              {l.kind} · {l.destination} · {peso(l.price)}
+                              {l.reviewCount ? ` · ${l.rating} (${l.reviewCount} reviews)` : ""}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-full"
+                            onClick={() => openEdit(l)}
+                          >
+                            <Pencil className="size-4" /> Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            className="rounded-full text-destructive"
+                            disabled={removeListing.isPending}
+                            onClick={() => {
+                              if (confirm(`Delete “${l.title}”?`)) removeListing.mutate(l.id);
+                            }}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
                         </div>
                       </div>
-                      <div className="flex shrink-0 gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-full"
-                          onClick={() => openEdit(l)}
-                        >
-                          <Pencil className="size-4" /> Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="rounded-full text-destructive"
-                          disabled={removeListing.isPending}
-                          onClick={() => {
-                            if (confirm(`Delete “${l.title}”?`)) removeListing.mutate(l.id);
-                          }}
-                        >
-                          <Trash2 className="size-4" />
-                        </Button>
-                      </div>
+                      {l.reviews?.length ? (
+                        <div className="mt-4 space-y-2 border-t border-border pt-4">
+                          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                            Traveller ratings (optional removal)
+                          </p>
+                          {l.reviews.map((r) => (
+                            <div
+                              key={r.id}
+                              className="flex flex-col gap-2 rounded-xl bg-secondary/40 p-3 sm:flex-row sm:items-start sm:justify-between"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium">
+                                  {r.author} · {r.rating}/5
+                                </p>
+                                <p className="mt-1 text-sm text-muted-foreground">{r.body}</p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="shrink-0 rounded-full text-destructive"
+                                disabled={removeReview.isPending}
+                                onClick={() => {
+                                  if (confirm("Remove this review?")) {
+                                    removeReview.mutate({ listingId: l.id, reviewId: r.id });
+                                  }
+                                }}
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
             </TabsContent>
@@ -521,6 +574,10 @@ function Admin() {
 
             <TabsContent value="contact" className="mt-6">
               {user ? <ContactSettings actorEmail={user.email} /> : null}
+            </TabsContent>
+
+            <TabsContent value="messages" className="mt-6">
+              {user ? <NotificationBroadcast actorEmail={user.email} /> : null}
             </TabsContent>
 
             <TabsContent value="admins" className="mt-6 space-y-6">

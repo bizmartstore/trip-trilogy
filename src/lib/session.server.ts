@@ -3,7 +3,7 @@
  * The browser never stores credentials — only a signed session token.
  */
 import { normalizeEmail } from "@/lib/constants";
-import { readAccountRow } from "@/lib/supabase-rest.server";
+import { lookupAccountForSession } from "@/lib/store.server";
 import { firstEnv } from "@/lib/worker-env";
 
 const COOKIE_NAME = "nexora_session";
@@ -104,16 +104,7 @@ export async function getSessionUser(request: Request) {
   if (!token) return null;
   const session = await parseSessionToken(token);
   if (!session) return null;
-
-  const row = await readAccountRow(session.email);
-  if (!row) return null;
-
-  return {
-    name: String(row.name ?? session.email.split("@")[0]),
-    email: session.email,
-    role: row.role === "admin" ? ("admin" as const) : ("tourist" as const),
-    picture: typeof row.picture === "string" && row.picture ? row.picture : undefined,
-  };
+  return lookupAccountForSession(session.email);
 }
 
 export function jsonWithSession(body: unknown, token: string, request: Request, status = 200) {

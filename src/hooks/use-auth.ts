@@ -18,11 +18,12 @@ async function fetchSession(): Promise<AuthUser | null> {
       credentials: "same-origin",
       headers: { accept: "application/json" },
     });
-    if (res.status === 401) return null;
-    if (res.status === 404) return cachedUser;
-    if (!res.ok) return cachedUser;
-    const data = (await res.json()) as { user?: AuthUser | null };
-    return data.user ?? null;
+    if (res.ok) {
+      const data = (await res.json()) as { user?: AuthUser | null };
+      return data.user ?? null;
+    }
+    if (res.status === 401) return cachedUser;
+    return cachedUser;
   } catch {
     return cachedUser;
   }
@@ -45,10 +46,10 @@ export function useAuth() {
 
   const refresh = useCallback(async () => {
     const session = await fetchSession();
-    cachedUser = session;
-    setUser(session);
+    if (session) cachedUser = session;
+    setUser(session ?? cachedUser);
     setReady(true);
-    return session;
+    return session ?? cachedUser;
   }, []);
 
   useEffect(() => {

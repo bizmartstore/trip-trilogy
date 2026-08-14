@@ -1,13 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import { motion } from "motion/react";
-import { Clock, Heart, MapPin, Star, Users } from "lucide-react";
-import { useState } from "react";
+import { Clock, Heart, MapPin, Users } from "lucide-react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
+import { RatingBadge } from "@/components/listings/rating-badge";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { fetchFavorites, toggleFavorite } from "@/lib/api";
 import type { Listing } from "@/lib/types";
 import { cn, peso } from "@/lib/utils";
+import { useAuth } from "@/hooks/use-auth";
 
 const kindLabel: Record<Listing["kind"], string> = {
   tour: "Tour",
@@ -16,7 +19,23 @@ const kindLabel: Record<Listing["kind"], string> = {
 };
 
 export function ListingCard({ listing, index = 0 }: { listing: Listing; index?: number }) {
-  const [saved, setSaved] = useState(false);
+  const { user } = useAuth();
+  const favorites = useQuery({
+    queryKey: ["favorites", user?.email],
+    queryFn: () => fetchFavorites(user!.email),
+    enabled: !!user,
+  });
+  const saved = favorites.data?.some((l) => l.id === listing.id) ?? false;
+
+  const save = useMutation({
+    mutationFn: () => toggleFavorite(user!.email, listing.id),
+    onSuccess: (result) => {
+      toast.success(result.saved ? "Saved to favourites" : "Removed from favourites");
+      void favorites.refetch();
+    },
+    onError: () => toast.error("Sign in to save listings"),
+  });
+
   const discounted = listing.discountPct
     ? Math.round(listing.price * (1 - listing.discountPct / 100))
     : listing.price;
@@ -66,9 +85,13 @@ export function ListingCard({ listing, index = 0 }: { listing: Listing; index?: 
       <button
         type="button"
         aria-label={saved ? "Remove from favourites" : "Save to favourites"}
-        onClick={() => {
-          setSaved((s) => !s);
-          toast.success(saved ? "Removed from favourites" : "Saved to favourites");
+        onClick={(e) => {
+          e.preventDefault();
+          if (!user) {
+            toast.error("Sign in to save listings");
+            return;
+          }
+          save.mutate();
         }}
         className="absolute right-3 top-3 grid size-9 place-items-center rounded-full bg-card/85 backdrop-blur transition-transform hover:scale-110"
       >
@@ -80,11 +103,7 @@ export function ListingCard({ listing, index = 0 }: { listing: Listing; index?: 
           <Link to="/listing/$slug" params={{ slug: listing.slug }} className="min-w-0">
             <h3 className="truncate font-display text-lg font-semibold">{listing.title}</h3>
           </Link>
-          <span className="flex shrink-0 items-center gap-1 text-sm font-semibold">
-            <Star className="size-4 fill-gold text-gold" />
-            {listing.rating}
-            <span className="font-normal text-muted-foreground">({listing.reviewCount})</span>
-          </span>
+          <RatingBadge rating={listing.rating} reviewCount={listing.reviewCount} />
         </div>
 
         <p className="line-clamp-2 text-sm text-muted-foreground">{listing.tagline}</p>

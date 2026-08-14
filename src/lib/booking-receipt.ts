@@ -1,0 +1,157 @@
+import QRCode from "qrcode";
+
+import { bookingConfirmationUrl } from "@/lib/booking-url";
+import type { Booking, HubSettings } from "@/lib/types";
+import { peso } from "@/lib/utils";
+
+const STATUS_LABELS: Record<Booking["status"], string> = {
+  pending: "Pending admin approval",
+  approved: "Approved — awaiting confirmation",
+  confirmed: "Confirmed",
+  completed: "Completed",
+  cancelled: "Cancelled",
+  rejected: "Declined",
+};
+
+export function bookingStatusLabel(status: Booking["status"]) {
+  return STATUS_LABELS[status] ?? status;
+}
+
+export async function generateBookingQrDataUrl(reference: string) {
+  return QRCode.toDataURL(bookingConfirmationUrl(reference), {
+    width: 256,
+    margin: 2,
+    errorCorrectionLevel: "M",
+    color: { dark: "#0b2b2b", light: "#ffffff" },
+  });
+}
+
+function loadImage(src: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, maxWidth: number, lineHeight: number) {
+  const words = text.split(" ");
+  let line = "";
+  let cy = y;
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, x, cy);
+      line = word;
+      cy += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  if (line) ctx.fillText(line, x, cy);
+  return cy;
+}
+
+export async function downloadBookingReceipt(
+  booking: Booking,
+  options: { qrDataUrl: string; settings?: HubSettings },
+) {
+  const width = 400;
+  const height = 640;
+  const canvas = document.createElement("canvas");
+  canvas.width = width * 2;
+  canvas.height = height * 2;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Could not create receipt");
+
+  ctx.scale(2, 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = "#0b2b2b";
+  ctx.fillRect(0, 0, width, 52);
+  ctx.fillStyle = "#c9a96e";
+  ctx.font = "600 17px 'Segoe UI', system-ui, sans-serif";
+  ctx.fillText("NEXORA", 20, 32);
+  ctx.fillStyle = "#e8f0f0";
+  ctx.font = "12px 'Segoe UI', system-ui, sans-serif";
+  ctx.fillText("Palawan travel receipt", 20, 46);
+
+  ctx.fillStyle = "#0b2b2b";
+  ctx.font = "700 20px ui-monospace, monospace";
+  ctx.fillText(booking.reference, 20, 84);
+
+  ctx.strokeStyle = "#e5e7eb";
+  ctx.beginPath();
+  ctx.moveTo(20, 96);
+  ctx.lineTo(width - 20, 96);
+  ctx.stroke();
+
+  const rows: [string, string][] = [
+    ["Listing", booking.listingTitle],
+    ["Date", booking.date],
+    ["Guests", String(booking.guests)],
+    ["Guest", booking.customer],
+    ["Total", peso(booking.total)],
+    ["Payment", booking.paid ? "Paid" : "Pay on arrival"],
+    ["Status", bookingStatusLabel(booking.status)],
+  ];
+
+  ctx.font = "13px 'Segoe UI', system-ui, sans-serif";
+  let y = 118;
+  for (const [label, value] of rows) {
+    ctx.fillStyle = "#64748b";
+    ctx.fillText(label, 20, y);
+    ctx.fillStyle = "#0b2b2b";
+    ctx.font = "600 13px 'Segoe UI', system-ui, sans-serif";
+    const lines = wrapText(ctx, value, width - 20, y, width - 130, 16);
+    y = Math.max(lines, y) + 22;
+    ctx.font = "13px 'Segoe UI', system-ui, sans-serif";
+  }
+
+  const qr = await loadImage(options.qrDataUrl);
+  const qrSize = 108;
+  const qrX = (width - qrSize) / 2;
+  ctx.drawImage(qr, qrX, height - 188, qrSize, qrSize);
+  ctx.fillStyle = "#64748b";
+  ctx.font = "11px 'Segoe UI', system-ui, sans-serif";
+  ctx.textAlign = "center";
+  ctx.fillText("Scan to view this reservation online", width / 2, height - 64);
+  const confirmUrl = bookingConfirmationUrl(booking.reference);
+  ctx.font = "9px ui-monospace, monospace";
+  ctx.fillText(confirmUrl.replace(/^https?:\/\//, ""), width / 2, height - 48);
+  if (options.settings?.contactPhone) {
+    ctx.font = "11px 'Segoe UI', system-ui, sans-serif";
+    ctx.fillText(`Follow up: ${options.settings.contactPhone}`, width / 2, height - 26);
+  }
+  ctx.textAlign = "left";
+
+  const stamp = new Date().toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "10px 'Segoe UI', system-ui, sans-serif";
+  ctx.fillText(`Generated ${stamp}`, 20, height - 12);
+
+  await new Promise<void>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Could not create receipt image"));
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.download = `nexora-${booking.reference}.png`;
+        link.href = url;
+        link.click();
+        URL.revokeObjectURL(url);
+        resolve();
+      },
+      "image/png",
+      1,
+    );
+  });
+}

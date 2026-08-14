@@ -165,9 +165,17 @@ function RealtimeBridge() {
   return null;
 }
 
+function usePwa() {
+  useEffect(() => {
+    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  }, []);
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   useNoZoom();
+  usePwa();
 
   return (
     <QueryClientProvider client={queryClient}>

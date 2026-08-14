@@ -10,6 +10,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,7 @@ import { useTheme } from "@/hooks/use-theme";
 import { cn } from "@/lib/utils";
 import { NEXORA_LOGO_SRC } from "@/lib/brand";
 import { useAuth } from "@/hooks/use-auth";
+import { fetchNotifications } from "@/lib/api";
 
 const nav = [
   { to: "/explore", label: "Explore", search: { kind: "all" as const } },
@@ -37,6 +39,13 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
   const { user, signOut, isAdmin } = useAuth();
+  const notifications = useQuery({
+    queryKey: ["notifications", user?.email],
+    queryFn: () => fetchNotifications(user!.email),
+    enabled: !!user && user.role !== "admin",
+    refetchInterval: 30_000,
+  });
+  const unreadCount = notifications.data?.filter((n) => !n.read).length ?? 0;
   const { theme, toggle } = useTheme();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const overHero = pathname === "/" && !scrolled;
@@ -127,11 +136,15 @@ export function Navbar() {
               size="icon"
               aria-label="Notifications"
               asChild
-              className={cn("relative hidden rounded-full sm:inline-flex", overHero && "text-deep-foreground hover:bg-background/15")}
+              className={cn("relative rounded-full", overHero && "text-deep-foreground hover:bg-background/15")}
             >
               <Link to="/dashboard">
                 <Bell className="size-4.5" />
-                <span className="absolute right-1.5 top-1.5 size-2 rounded-full bg-gold" />
+                {user && !isAdmin && unreadCount > 0 ? (
+                  <span className="absolute right-1 top-1 grid min-w-[18px] place-items-center rounded-full bg-gold px-1 text-[10px] font-bold text-gold-foreground">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                ) : null}
               </Link>
             </Button>
 

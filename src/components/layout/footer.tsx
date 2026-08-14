@@ -130,16 +130,26 @@ export function Footer() {
             © {new Date().getFullYear()} Nexora. All rights reserved.
           </p>
           <div className="flex items-center gap-2">
-            {[Instagram, Twitter, Facebook].map((Icon, i) => (
-              <a
-                key={i}
-                href="#"
-                aria-label="Social media"
-                className="grid size-9 place-items-center rounded-full border border-deep-foreground/20 transition-colors hover:bg-deep-foreground/10"
-              >
-                <Icon className="size-4" />
-              </a>
-            ))}
+            {(
+              [
+                { Icon: Instagram, url: contact?.socialInstagram, label: "Instagram" },
+                { Icon: Twitter, url: contact?.socialTwitter, label: "X (Twitter)" },
+                { Icon: Facebook, url: contact?.socialFacebook, label: "Facebook" },
+              ] as const
+            )
+              .filter((s) => s.url?.trim())
+              .map(({ Icon, url, label }) => (
+                <a
+                  key={label}
+                  href={url!.trim()}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={label}
+                  className="grid size-9 place-items-center rounded-full border border-deep-foreground/20 transition-colors hover:bg-deep-foreground/10"
+                >
+                  <Icon className="size-4" />
+                </a>
+              ))}
           </div>
         </div>
       </div>

@@ -24,10 +24,24 @@ export interface Destination {
 export interface Review {
   id: string;
   author: string;
+  email: string;
   avatar: string;
   rating: number;
   date: string;
   body: string;
+}
+
+export type NotificationKind = "booking" | "message" | "system";
+
+export interface HubNotification {
+  id: string;
+  email: string;
+  title: string;
+  body: string;
+  link?: string;
+  read: boolean;
+  kind: NotificationKind;
+  createdAt: string;
 }
 
 export interface ItineraryDay {
@@ -141,6 +155,10 @@ export interface HubSettings {
   officeHours: string;
   /** Short note shown on the booking confirmation screen. */
   bookingNotice: string;
+  /** Footer social links — leave blank to hide the icon. */
+  socialInstagram?: string;
+  socialTwitter?: string;
+  socialFacebook?: string;
 }
 
 

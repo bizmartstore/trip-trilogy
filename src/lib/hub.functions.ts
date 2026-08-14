@@ -2,21 +2,32 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 import {
+  addListingReview,
   addTestimonialRecord,
+  broadcastNotification,
   createBookingRecord,
   createListingRecord,
   deleteListingRecord,
   deleteTestimonialRecord,
+  getAdminBookings,
+  getBookingByReference,
+  getBookingsForEmail,
   getRevision,
   getSettings,
   getBookingFeed,
   getSnapshot,
   inviteAdmin,
   listAdminInvites,
+  listFavorites,
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
   registerAccount,
   removeAdminInvite,
+  removeListingReview,
   setBookingStatus,
   signInAccount,
+  toggleFavorite,
   updateListingRecord,
   updateNotifyPreferences,
   updateSettings,
@@ -188,6 +199,20 @@ export const bookingFeedFn = createServerFn({ method: "GET" }).handler(async () 
   getBookingFeed(25),
 );
 
+export const fetchAdminBookingsFn = createServerFn({ method: "GET" }).handler(async () =>
+  getAdminBookings(),
+);
+
+export const fetchBookingsForEmailFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => z.object({ email: emailSchema }).parse(data))
+  .handler(async ({ data }) => getBookingsForEmail(data.email));
+
+export const fetchBookingByReferenceFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z.object({ reference: z.string().trim().min(4).max(40) }).parse(data),
+  )
+  .handler(async ({ data }) => getBookingByReference(data.reference));
+
 export const updateNotifyPrefsFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
     z
@@ -341,12 +366,88 @@ export const updateSettingsFn = createServerFn({ method: "POST" })
             contactEmail: z.string().trim().max(160).optional(),
             officeHours: z.string().trim().max(120).optional(),
             bookingNotice: z.string().trim().max(400).optional(),
+            socialInstagram: z.string().trim().max(300).optional(),
+            socialTwitter: z.string().trim().max(300).optional(),
+            socialFacebook: z.string().trim().max(300).optional(),
           })
           .partial(),
       })
       .parse(data),
   )
   .handler(async ({ data }) => updateSettings(data.actorEmail, data.patch));
+
+export const addListingReviewFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        email: emailSchema,
+        name: z.string().trim().min(1).max(80),
+        listingId: z.string().min(1),
+        rating: z.number().min(1).max(5),
+        body: z.string().trim().min(10).max(800),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) => addListingReview(data));
+
+export const removeListingReviewFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        actorEmail: emailSchema,
+        listingId: z.string().min(1),
+        reviewId: z.string().min(1),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) =>
+    removeListingReview(data.actorEmail, data.listingId, data.reviewId),
+  );
+
+export const toggleFavoriteFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z.object({ email: emailSchema, listingId: z.string().min(1) }).parse(data),
+  )
+  .handler(async ({ data }) => toggleFavorite(data.email, data.listingId));
+
+export const listFavoritesFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => z.object({ email: emailSchema }).parse(data))
+  .handler(async ({ data }) => listFavorites(data.email));
+
+export const listNotificationsFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => z.object({ email: emailSchema }).parse(data))
+  .handler(async ({ data }) => listNotifications(data.email));
+
+export const markNotificationReadFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z.object({ email: emailSchema, id: z.string().min(1) }).parse(data),
+  )
+  .handler(async ({ data }) => markNotificationRead(data.email, data.id));
+
+export const markAllNotificationsReadFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) => z.object({ email: emailSchema }).parse(data))
+  .handler(async ({ data }) => markAllNotificationsRead(data.email));
+
+export const broadcastNotificationFn = createServerFn({ method: "POST" })
+  .validator((data: unknown) =>
+    z
+      .object({
+        actorEmail: emailSchema,
+        title: z.string().trim().min(2).max(120),
+        body: z.string().trim().min(4).max(600),
+        link: z.string().trim().max(200).optional(),
+        targetEmail: emailSchema.optional(),
+      })
+      .parse(data),
+  )
+  .handler(async ({ data }) =>
+    broadcastNotification(data.actorEmail, {
+      title: data.title,
+      body: data.body,
+      link: data.link,
+      targetEmail: data.targetEmail,
+    }),
+  );
 
 /** Keep-alive: tiny Supabase read that stops the database from idling out. */
 export const keepAliveFn = createServerFn({ method: "GET" }).handler(async () => {

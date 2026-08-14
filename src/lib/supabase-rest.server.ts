@@ -88,19 +88,18 @@ export async function upsertBookingRow(row: Record<string, unknown>) {
 
 /** Persist an account row so every sign-up lives permanently in Supabase. */
 export async function upsertAccountRow(row: Record<string, unknown>) {
+  const email = encodeURIComponent(String(row.email ?? ""));
   try {
     await rest("accounts?on_conflict=email", {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates" },
       body: JSON.stringify([row]),
     });
-  } catch (error) {
-    if (!("password_hash" in row)) throw error;
-    const { password_hash: _passwordHash, ...withoutHash } = row;
-    await rest("accounts?on_conflict=email", {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates" },
-      body: JSON.stringify([withoutHash]),
+  } catch {
+    // Some projects already have the row (e.g. admin seed) — patch it in place.
+    await rest(`accounts?email=eq.${email}`, {
+      method: "PATCH",
+      body: JSON.stringify(row),
     });
   }
 }
@@ -118,6 +117,44 @@ export async function readAccountRow(email: string): Promise<Record<string, unkn
 export async function listBookingRows(limit = 30): Promise<Record<string, unknown>[]> {
   const rows = (await rest(
     `bookings?select=*&order=created_at.desc&limit=${limit}`,
+  )) as Record<string, unknown>[] | null;
+  return rows ?? [];
+}
+
+/** Read all booking rows for admin dashboards and revenue reporting. */
+export async function listAllBookingRows(limit = 500): Promise<Record<string, unknown>[]> {
+  const rows = (await rest(
+    `bookings?select=*&order=created_at.desc&limit=${limit}`,
+  )) as Record<string, unknown>[] | null;
+  return rows ?? [];
+}
+
+/** Read bookings for one traveller email. */
+export async function listBookingRowsByEmail(
+  email: string,
+  limit = 100,
+): Promise<Record<string, unknown>[]> {
+  const encoded = encodeURIComponent(email.trim().toLowerCase());
+  const rows = (await rest(
+    `bookings?customer_email=eq.${encoded}&select=*&order=created_at.desc&limit=${limit}`,
+  )) as Record<string, unknown>[] | null;
+  return rows ?? [];
+}
+
+/** Remove seeded demo reservations from the real bookings table. */
+export async function deleteDemoBookingRows(references: string[]) {
+  if (!references.length) return;
+  const quoted = references.map((r) => `"${r.replace(/"/g, "")}"`).join(",");
+  await rest(`bookings?reference=in.(${quoted})`, { method: "DELETE" });
+}
+
+/** Look up one reservation by its public reference code. */
+export async function listBookingRowsByReference(
+  reference: string,
+): Promise<Record<string, unknown>[]> {
+  const encoded = encodeURIComponent(reference.trim());
+  const rows = (await rest(
+    `bookings?reference=eq.${encoded}&select=*&limit=1`,
   )) as Record<string, unknown>[] | null;
   return rows ?? [];
 }

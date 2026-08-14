@@ -4,10 +4,14 @@
  * with every booking mirrored into a real `bookings` table for admin visibility.
  * Revision bumps on every mutation so clients poll cheaply for realtime updates.
  */
-import { destinations as seedDestinations, demoBookings, listings as seedListings } from "@/data/catalog";
+import { destinations as seedDestinations, listings as seedListings } from "@/data/catalog";
 import { isMainAdminEmail, normalizeEmail } from "@/lib/constants";
 import {
+  deleteDemoBookingRows,
+  listAllBookingRows,
   listBookingRows,
+  listBookingRowsByEmail,
+  listBookingRowsByReference,
   readAccountRow,
   readHubDocument,
   readHubRevision,
@@ -25,8 +29,11 @@ import type {
   Destination,
   HubAccount,
   HubSettings,
+  HubNotification,
   Listing,
   ListingInput,
+  ListingKind,
+  Review,
   Testimonial,
 } from "@/lib/types";
 
@@ -39,6 +46,9 @@ export interface HubState {
   adminInvites: string[];
   testimonials: Testimonial[];
   settings: HubSettings;
+  notifications: HubNotification[];
+  /** Saved listing ids keyed by traveller email. */
+  favorites: Record<string, string[]>;
 }
 
 const GLOBAL_KEY = "__nexora_store_v1__";
@@ -55,18 +65,129 @@ export const defaultSettings: HubSettings = {
   officeHours: "Daily · 7:00 AM – 9:00 PM (PHT)",
   bookingNotice:
     "Our team reviews every reservation manually. You will receive a call or text message once your booking is approved.",
+  socialInstagram: "",
+  socialTwitter: "",
+  socialFacebook: "",
 };
 
+const SEED_REVIEW_IDS = new Set(["r1", "r2", "r3"]);
+const DEMO_BOOKING_IDS = new Set(["b1", "b2", "b3", "b4", "b5"]);
+const DEMO_BOOKING_REFERENCES = [
+  "EXH-4821-COR",
+  "EXH-7710-ELN",
+  "EXH-2093-PPS",
+  "EXH-5512-ELN",
+  "EXH-3388-SVT",
+];
+
+function isDemoBooking(booking: Booking) {
+  return DEMO_BOOKING_IDS.has(booking.id) || DEMO_BOOKING_REFERENCES.includes(booking.reference);
+}
+
+/** Strip demo reservations shipped with early seeds. */
+function sanitizeDemoBookings(bookings: Booking[]) {
+  return bookings.filter((b) => !isDemoBooking(b));
+}
+
+function rowToBooking(row: Record<string, unknown>, listings: Listing[]): Booking {
+  const listingId = String(row["listing_id"] ?? "");
+  const listing = listings.find((l) => l.id === listingId);
+  return {
+    id: String(row["id"]),
+    reference: String(row["reference"] ?? ""),
+    listingId,
+    listingTitle: String(row["listing_title"] ?? ""),
+    kind: String(row["kind"] ?? "tour") as ListingKind,
+    image: listing?.images[0] ?? "",
+    guests: Number(row["guests"] ?? 1),
+    date: String(row["date"] ?? ""),
+    total: Number(row["total"] ?? 0),
+    status: String(row["status"] ?? "pending") as BookingStatus,
+    paid: Boolean(row["paid"]),
+    customer: String(row["customer"] ?? ""),
+    customerEmail: (row["customer_email"] as string | null) ?? undefined,
+    customerPhone: (row["customer_phone"] as string | null) ?? undefined,
+    notifyPreference: (row["notify_preference"] as NotifyPreference | null) ?? undefined,
+    createdAt: String(row["created_at"] ?? ""),
+    statusUpdatedAt: (row["status_updated_at"] as string | null) ?? undefined,
+    approvedAt: (row["approved_at"] as string | null) ?? undefined,
+    rejectedAt: (row["rejected_at"] as string | null) ?? undefined,
+    statusBy: (row["status_by"] as string | null) ?? undefined,
+    adminNote: (row["admin_note"] as string | null) ?? undefined,
+  };
+}
+
+function mapFeedBooking(row: Record<string, unknown>) {
+  return {
+    id: String(row["id"]),
+    reference: String(row["reference"] ?? ""),
+    listingTitle: String(row["listing_title"] ?? ""),
+    customer: String(row["customer"] ?? ""),
+    customerEmail: (row["customer_email"] as string | null) ?? undefined,
+    customerPhone: (row["customer_phone"] as string | null) ?? undefined,
+    guests: Number(row["guests"] ?? 1),
+    date: String(row["date"] ?? ""),
+    total: Number(row["total"] ?? 0),
+    status: String(row["status"] ?? "pending") as BookingStatus,
+    adminNote: (row["admin_note"] as string | null) ?? undefined,
+    createdAt: String(row["created_at"] ?? ""),
+    statusUpdatedAt: (row["status_updated_at"] as string | null) ?? undefined,
+  };
+}
+
+/** Drop demo review bundles shipped with the seed catalog. */
+function sanitizeSeedReviews(listings: Listing[]) {
+  for (const listing of listings) {
+    const reviews = listing.reviews ?? [];
+    if (reviews.length && reviews.every((r) => SEED_REVIEW_IDS.has(r.id))) {
+      listing.reviews = [];
+      listing.rating = 0;
+      listing.reviewCount = 0;
+    }
+  }
+}
+
+function recalculateListingRating(listing: Listing) {
+  const reviews = listing.reviews ?? [];
+  if (!reviews.length) {
+    listing.rating = 0;
+    listing.reviewCount = 0;
+    return;
+  }
+  listing.reviewCount = reviews.length;
+  listing.rating =
+    Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) * 10) / 10;
+}
+
+function pushNotification(
+  state: HubState,
+  input: Omit<HubNotification, "id" | "read" | "createdAt">,
+) {
+  if (!state.notifications) state.notifications = [];
+  state.notifications.unshift({
+    id: crypto.randomUUID(),
+    read: false,
+    createdAt: new Date().toISOString(),
+    ...input,
+    email: normalizeEmail(input.email),
+  });
+  if (state.notifications.length > 200) state.notifications.length = 200;
+}
+
 function emptySeed(): HubState {
+  const listings = structuredClone(seedListings);
+  sanitizeSeedReviews(listings);
   return {
     revision: 1,
-    listings: structuredClone(seedListings),
-    bookings: structuredClone(demoBookings),
+    listings,
+    bookings: [],
     destinations: structuredClone(seedDestinations),
     accounts: [],
     adminInvites: [],
     testimonials: [],
     settings: { ...defaultSettings },
+    notifications: [],
+    favorites: {},
   };
 }
 
@@ -80,11 +201,13 @@ let hydratePromise: Promise<void> | null = null;
 
 function applyRemote(parsed: Partial<HubState> | null) {
   if (!parsed?.listings || !parsed?.bookings) return;
+  const listings = structuredClone(parsed.listings);
+  sanitizeSeedReviews(listings);
   const g = globalThis as GlobalStore;
   g[GLOBAL_KEY] = {
     revision: parsed.revision ?? 1,
-    listings: parsed.listings,
-    bookings: parsed.bookings,
+    listings,
+    bookings: sanitizeDemoBookings(parsed.bookings),
     destinations: parsed.destinations?.length
       ? parsed.destinations
       : structuredClone(seedDestinations),
@@ -92,7 +215,35 @@ function applyRemote(parsed: Partial<HubState> | null) {
     adminInvites: (parsed.adminInvites ?? []).map(normalizeEmail),
     testimonials: parsed.testimonials ?? [],
     settings: { ...defaultSettings, ...(parsed.settings ?? {}) },
+    notifications: parsed.notifications ?? [],
+    favorites: parsed.favorites ?? {},
   };
+}
+
+async function purgeDemoBookingsEverywhere(state: HubState) {
+  const beforeIds = state.bookings.map((b) => b.id).sort().join(",");
+  state.bookings = sanitizeDemoBookings(state.bookings);
+  let changed = beforeIds !== state.bookings.map((b) => b.id).sort().join(",");
+
+  if (supabaseConfigured()) {
+    try {
+      await deleteDemoBookingRows(DEMO_BOOKING_REFERENCES);
+    } catch {
+      // Non-fatal — hub document cleanup still runs.
+    }
+    const rows = await listAllBookingRows();
+    const synced = rows.map((row) => rowToBooking(row, state.listings));
+    const syncedIds = synced.map((b) => b.id).sort().join(",");
+    if (syncedIds !== state.bookings.map((b) => b.id).sort().join(",")) {
+      state.bookings = synced;
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    state.revision += 1;
+    await persistToRemote();
+  }
 }
 
 async function hydrateFromRemote() {
@@ -101,9 +252,12 @@ async function hydrateFromRemote() {
     const doc = await readHubDocument<Partial<HubState>>();
     if (doc) {
       applyRemote({ ...doc.data, revision: doc.revision });
+      await purgeDemoBookingsEverywhere(getMemory());
     } else {
       // First boot against an empty database — publish the seed once.
-      await writeHubDocument(getMemory(), getMemory().revision);
+      const state = getMemory();
+      state.bookings = [];
+      await writeHubDocument(state, state.revision);
     }
   } catch {
     // Table missing or network hiccup — memory seed still serves the app.
@@ -234,44 +388,78 @@ function rememberAccount(account: HubAccount) {
   return account;
 }
 
-/** Pull the latest hub_state, then the accounts table, so other devices are visible. */
+function mergeAccounts(
+  email: string,
+  ...candidates: (HubAccount | null | undefined)[]
+): HubAccount | undefined {
+  const present = candidates.filter(Boolean) as HubAccount[];
+  if (!present.length) return undefined;
+  const passwordHash = present.find((a) => a.passwordHash)?.passwordHash ?? "";
+  const base = present[0];
+  return {
+    email,
+    name: present.find((a) => a.name)?.name ?? email.split("@")[0],
+    passwordHash,
+    role: base.role ?? "tourist",
+    picture: present.find((a) => a.picture)?.picture,
+    createdAt: present.find((a) => a.createdAt)?.createdAt ?? new Date().toISOString(),
+    notifyPreference: present.find((a) => a.notifyPreference)?.notifyPreference,
+    contactNumber: present.find((a) => a.contactNumber)?.contactNumber,
+  };
+}
+
+/** Pull the accounts table first (cross-device credentials), then hub_state for profile data. */
 async function findAccount(email: string): Promise<HubAccount | undefined> {
   await ensureStore();
+  const normalized = normalizeEmail(email);
+
+  let fromTable: HubAccount | null = null;
+  if (supabaseConfigured()) {
+    try {
+      const row = await readAccountRow(normalized);
+      if (row) fromTable = accountFromRow(row);
+    } catch {
+      // Fall through to hub_state.
+    }
+  }
+
   if (supabaseConfigured()) {
     try {
       const doc = await readHubDocument<Partial<HubState>>();
       if (doc) {
         const memory = getMemory();
-        const hasLocal = memory.accounts.some((account) => account.email === email);
-        // Always take remote when this isolate does not have the email, even if
-        // a failed persist left a higher local revision.
-        if (doc.revision >= memory.revision || !hasLocal) {
+        const local = memory.accounts.find((account) => account.email === normalized);
+        const remote = doc.data.accounts?.find((account) => account.email === normalized);
+        const shouldApplyRemote =
+          doc.revision >= memory.revision ||
+          !local ||
+          Boolean(remote?.passwordHash && !local.passwordHash);
+        if (shouldApplyRemote) {
           applyRemote({ ...doc.data, revision: doc.revision });
         }
       }
     } catch {
-      // Fall through to the accounts table lookup.
+      // Fall through to in-memory merge.
     }
   }
 
-  const local = getMemory().accounts.find((account) => account.email === email);
-  if (local?.passwordHash) return local;
-  if (!supabaseConfigured()) return local;
+  const local = getMemory().accounts.find((account) => account.email === normalized);
+  const merged = mergeAccounts(normalized, fromTable ?? undefined, local);
+  if (!merged) return undefined;
+  merged.role = resolveRole(normalized, getMemory().adminInvites);
+  return rememberAccount(merged);
+}
 
-  try {
-    const row = await readAccountRow(email);
-    if (!row) return local;
-    const fromRow = accountFromRow(row);
-    if (!fromRow) return local;
-    return rememberAccount({
-      ...fromRow,
-      passwordHash: fromRow.passwordHash || local?.passwordHash || "",
-      name: fromRow.name || local?.name || email.split("@")[0],
-      picture: fromRow.picture || local?.picture,
-    });
-  } catch {
-    return local;
-  }
+/** Resolve a signed-in user profile from Supabase + hub_state (for session cookies). */
+export async function lookupAccountForSession(email: string) {
+  const account = await findAccount(normalizeEmail(email));
+  if (!account) return null;
+  return {
+    name: account.name,
+    email: account.email,
+    role: account.role,
+    picture: account.picture,
+  };
 }
 
 function slugify(title: string) {
@@ -293,9 +481,19 @@ export async function registerAccount(input: {
   const state = await ensureStore();
   const email = normalizeEmail(input.email);
   const existing = await findAccount(email);
-  if (existing?.passwordHash) {
-    return { ok: false, error: "An account with this email already exists. Sign in instead." };
+
+  // Only block when the accounts table already has a saved password.
+  if (existing?.passwordHash && supabaseConfigured()) {
+    try {
+      const row = await readAccountRow(email);
+      if (typeof row?.password_hash === "string" && row.password_hash.length > 0) {
+        return { ok: false, error: "An account with this email already exists. Sign in instead." };
+      }
+    } catch {
+      // Table unreadable — allow completing a partial registration below.
+    }
   }
+
   const role = resolveRole(email, state.adminInvites);
   const account: HubAccount = {
     email,
@@ -307,16 +505,35 @@ export async function registerAccount(input: {
     notifyPreference: existing?.notifyPreference,
     contactNumber: existing?.contactNumber,
   };
+
   rememberAccount(account);
   if (role === "admin" && !isMainAdminEmail(email)) {
     state.adminInvites = state.adminInvites.filter((e) => e !== email);
   }
+
+  // Prefer hub_state; fall back to the accounts table if the document write fails.
+  let saved = false;
   try {
     await bumpAndWait(state);
+    saved = true;
   } catch {
-    return { ok: false, error: "Could not save your account to Supabase. Try again." };
+    // hub_state unavailable — try the accounts table directly.
   }
-  await mirrorAccount(account);
+  if (!saved) {
+    try {
+      await mirrorAccount(account, true);
+      saved = true;
+    } catch {
+      return { ok: false, error: "Could not save your account. Try again." };
+    }
+  } else {
+    try {
+      await mirrorAccount(account, true);
+    } catch {
+      // Non-fatal: hub_state already has credentials for sign-in.
+    }
+  }
+
   const { passwordHash: _, ...safe } = account;
   return { ok: true, account: safe };
 }
@@ -334,6 +551,22 @@ export async function signInAccount(input: {
         ? "No account found for that email. Create an account first."
         : supabaseMissingConfigMessage(),
     };
+  }
+  if (!existing.passwordHash) {
+    // Repair: password may live in hub_state but never reached the accounts table.
+    if (supabaseConfigured()) {
+      try {
+        const doc = await readHubDocument<Partial<HubState>>();
+        const remote = doc?.data.accounts?.find((a) => a.email === email);
+        if (remote?.passwordHash) {
+          existing.passwordHash = remote.passwordHash;
+          rememberAccount(existing);
+          await mirrorAccount(existing, true);
+        }
+      } catch {
+        // Fall through to the setup message below.
+      }
+    }
   }
   if (!existing.passwordHash) {
     return {
@@ -354,7 +587,11 @@ export async function signInAccount(input: {
     }
     await bumpAndWait(state);
   }
-  await mirrorAccount(existing);
+  try {
+    await mirrorAccount(existing, true);
+  } catch {
+    // Hub document already has credentials.
+  }
   const { passwordHash: _, ...safe } = existing;
   return { ok: true, account: safe };
 }
@@ -482,6 +719,15 @@ export async function createBookingRecord(input: {
     statusUpdatedAt: new Date().toISOString(),
   };
   state.bookings.unshift(booking);
+  if (input.customerEmail) {
+    pushNotification(state, {
+      email: input.customerEmail,
+      title: "Booking submitted",
+      body: `${listing.title} (${ref}) for ${input.date} — pending approval.`,
+      link: "/dashboard",
+      kind: "booking",
+    });
+  }
   bump(state);
   await mirrorBooking(booking);
   return booking;
@@ -532,8 +778,44 @@ export async function setBookingStatus(
   booking.statusUpdatedAt = now;
   if (options.actorEmail) booking.statusBy = normalizeEmail(options.actorEmail);
   if (options.note !== undefined) booking.adminNote = options.note.trim() || undefined;
-  if (status === "approved" || status === "confirmed") booking.approvedAt = now;
-  if (status === "rejected" || status === "cancelled") booking.rejectedAt = now;
+  if (status === "approved" || status === "confirmed" || status === "completed") {
+    booking.approvedAt = now;
+    booking.paid = true;
+  }
+  if (status === "rejected" || status === "cancelled") {
+    booking.rejectedAt = now;
+    booking.paid = false;
+  }
+
+  const email = booking.customerEmail?.trim().toLowerCase();
+  if (email) {
+    const labels: Record<BookingStatus, string> = {
+      pending: "Booking received",
+      approved: "Booking approved",
+      confirmed: "Booking confirmed",
+      completed: "Trip completed",
+      cancelled: "Booking cancelled",
+      rejected: "Booking declined",
+    };
+    const bodies: Record<BookingStatus, string> = {
+      pending: `${booking.listingTitle} (${booking.reference}) is awaiting review.`,
+      approved: `${booking.listingTitle} — ${booking.reference} was approved. Our team will reach out soon.`,
+      confirmed: `${booking.listingTitle} — ${booking.reference} is confirmed for ${booking.date}.`,
+      completed: `We hope you enjoyed ${booking.listingTitle}. Leave a review when you have a moment.`,
+      cancelled: `${booking.listingTitle} (${booking.reference}) was cancelled.`,
+      rejected: `${booking.listingTitle} (${booking.reference}) could not be confirmed.${
+        options.note ? ` ${options.note}` : ""
+      }`,
+    };
+    pushNotification(state, {
+      email,
+      title: labels[status],
+      body: bodies[status],
+      link: "/dashboard",
+      kind: "booking",
+    });
+  }
+
   bump(state);
   await mirrorBooking(booking);
   return {
@@ -547,59 +829,104 @@ export async function setBookingStatus(
   };
 }
 
-/** Live feed straight from the Supabase `bookings` table (falls back to hub state). */
+/** Live feed straight from the Supabase `bookings` table. */
 export async function getBookingFeed(limit = 25) {
   const state = await ensureStore();
   if (supabaseConfigured()) {
     try {
       const rows = await listBookingRows(limit);
-      if (rows.length) {
-        return {
-          source: "supabase" as const,
-          bookings: rows.map((r) => ({
-            id: String(r["id"]),
-            reference: String(r["reference"] ?? ""),
-            listingTitle: String(r["listing_title"] ?? ""),
-            customer: String(r["customer"] ?? ""),
-            customerEmail: (r["customer_email"] as string | null) ?? undefined,
-            customerPhone: (r["customer_phone"] as string | null) ?? undefined,
-            guests: Number(r["guests"] ?? 1),
-            date: String(r["date"] ?? ""),
-            total: Number(r["total"] ?? 0),
-            status: String(r["status"] ?? "pending") as BookingStatus,
-            adminNote: (r["admin_note"] as string | null) ?? undefined,
-            createdAt: String(r["created_at"] ?? ""),
-            statusUpdatedAt: (r["status_updated_at"] as string | null) ?? undefined,
-          })),
-        };
-      }
+      return {
+        source: "supabase" as const,
+        bookings: rows.map(mapFeedBooking),
+      };
     } catch {
-      // fall through to hub state
+      // fall through to hub state only when Supabase is unreachable
     }
   }
   return {
     source: "local" as const,
-    bookings: state.bookings.slice(0, limit).map((b) => ({
-      id: b.id,
-      reference: b.reference,
-      listingTitle: b.listingTitle,
-      customer: b.customer,
-      customerEmail: b.customerEmail,
-      customerPhone: b.customerPhone,
-      guests: b.guests,
-      date: b.date,
-      total: b.total,
-      status: b.status,
-      adminNote: b.adminNote,
-      createdAt: b.createdAt ?? "",
-      statusUpdatedAt: b.statusUpdatedAt,
-    })),
+    bookings: sanitizeDemoBookings(state.bookings)
+      .slice(0, limit)
+      .map((b) => ({
+        id: b.id,
+        reference: b.reference,
+        listingTitle: b.listingTitle,
+        customer: b.customer,
+        customerEmail: b.customerEmail,
+        customerPhone: b.customerPhone,
+        guests: b.guests,
+        date: b.date,
+        total: b.total,
+        status: b.status,
+        adminNote: b.adminNote,
+        createdAt: b.createdAt ?? "",
+        statusUpdatedAt: b.statusUpdatedAt,
+      })),
   };
 }
 
+/** Admin console + revenue — always reads the Supabase bookings table when available. */
+export async function getAdminBookings(): Promise<Booking[]> {
+  const state = await ensureStore();
+  if (supabaseConfigured()) {
+    try {
+      const rows = await listAllBookingRows();
+      return rows.map((row) => rowToBooking(row, state.listings));
+    } catch {
+      // fall through
+    }
+  }
+  return sanitizeDemoBookings(state.bookings);
+}
+
+/** Traveller dashboard bookings — prefers Supabase rows for the signed-in email. */
+export async function getBookingsForEmail(email: string): Promise<Booking[]> {
+  const state = await ensureStore();
+  const key = normalizeEmail(email);
+  if (supabaseConfigured()) {
+    try {
+      const rows = await listBookingRowsByEmail(key);
+      if (rows.length) return rows.map((row) => rowToBooking(row, state.listings));
+    } catch {
+      // fall through
+    }
+  }
+  return sanitizeDemoBookings(state.bookings).filter(
+    (b) =>
+      b.customerEmail?.toLowerCase() === key ||
+      b.customer.toLowerCase() === key.split("@")[0].toLowerCase(),
+  );
+}
+
+/** Public lookup for QR confirmation pages and receipts. */
+export async function getBookingByReference(reference: string): Promise<Booking | null> {
+  const state = await ensureStore();
+  const ref = reference.trim();
+  if (!ref) return null;
+
+  if (supabaseConfigured()) {
+    try {
+      const rows = await listBookingRowsByReference(ref);
+      if (rows[0]) return rowToBooking(rows[0], state.listings);
+    } catch {
+      // fall through
+    }
+  }
+
+  return (
+    sanitizeDemoBookings(state.bookings).find(
+      (b) => b.reference.toLowerCase() === ref.toLowerCase(),
+    ) ?? null
+  );
+}
+
 /** Persist an account permanently in the Supabase `accounts` table. */
-async function mirrorAccount(account: HubAccount) {
-  if (!supabaseConfigured()) return;
+async function mirrorAccount(account: HubAccount, required = false) {
+  if (!supabaseConfigured()) {
+    if (required) throw new Error("Supabase is not configured");
+    return;
+  }
+  if (!account.passwordHash) return;
   try {
     await upsertAccountRow({
       email: account.email,
@@ -608,12 +935,13 @@ async function mirrorAccount(account: HubAccount) {
       picture: account.picture ?? null,
       notify_preference: account.notifyPreference ?? "call",
       contact_number: account.contactNumber ?? null,
-      password_hash: account.passwordHash || null,
+      password_hash: account.passwordHash,
       created_at: account.createdAt,
       updated_at: new Date().toISOString(),
     });
-  } catch {
-    // Non-fatal: the account still lives in the hub document.
+  } catch (error) {
+    if (required) throw error;
+    // Non-fatal for profile updates when the hub document already has the account.
   }
 }
 
@@ -771,4 +1099,131 @@ export async function deleteTestimonialRecord(actorEmail: string, id: string) {
   state.testimonials = state.testimonials.filter((t) => t.id !== id);
   bump(state);
   return { id };
+}
+
+export async function addListingReview(input: {
+  email: string;
+  name: string;
+  listingId: string;
+  rating: number;
+  body: string;
+}) {
+  const state = await ensureStore();
+  const email = normalizeEmail(input.email);
+  const account = state.accounts.find((a) => a.email === email);
+  if (!account) throw new Error("Sign in to leave a rating.");
+
+  const listing = state.listings.find((l) => l.id === input.listingId);
+  if (!listing) throw new Error("Listing not found.");
+
+  if (!listing.reviews) listing.reviews = [];
+  if (listing.reviews.some((r) => r.email === email)) {
+    throw new Error("You already rated this listing.");
+  }
+
+  const review: Review = {
+    id: crypto.randomUUID(),
+    author: input.name.trim() || account.name,
+    email,
+    avatar: (input.name.trim() || account.name).slice(0, 2).toUpperCase(),
+    rating: Math.min(5, Math.max(1, Math.round(input.rating))),
+    date: new Date().toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }),
+    body: input.body.trim(),
+  };
+  listing.reviews.unshift(review);
+  recalculateListingRating(listing);
+  bump(state);
+  return review;
+}
+
+export async function removeListingReview(actorEmail: string, listingId: string, reviewId: string) {
+  const state = await assertAdmin(actorEmail);
+  const listing = state.listings.find((l) => l.id === listingId);
+  if (!listing) throw new Error("Listing not found.");
+  listing.reviews = (listing.reviews ?? []).filter((r) => r.id !== reviewId);
+  recalculateListingRating(listing);
+  bump(state);
+  return { id: reviewId };
+}
+
+export async function toggleFavorite(email: string, listingId: string) {
+  const state = await ensureStore();
+  const key = normalizeEmail(email);
+  if (!state.favorites) state.favorites = {};
+  const list = state.favorites[key] ?? [];
+  const idx = list.indexOf(listingId);
+  if (idx >= 0) {
+    list.splice(idx, 1);
+    state.favorites[key] = list;
+    bump(state);
+    return { saved: false, listingIds: list };
+  }
+  state.favorites[key] = [listingId, ...list];
+  bump(state);
+  return { saved: true, listingIds: state.favorites[key] };
+}
+
+export async function listFavorites(email: string) {
+  const state = await ensureStore();
+  const ids = state.favorites?.[normalizeEmail(email)] ?? [];
+  return state.listings.filter((l) => ids.includes(l.id));
+}
+
+export async function listNotifications(email: string) {
+  const state = await ensureStore();
+  const key = normalizeEmail(email);
+  return (state.notifications ?? [])
+    .filter((n) => n.email === key)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export async function markNotificationRead(email: string, id: string) {
+  const state = await ensureStore();
+  const key = normalizeEmail(email);
+  const note = (state.notifications ?? []).find((n) => n.id === id && n.email === key);
+  if (!note) throw new Error("Notification not found.");
+  note.read = true;
+  bump(state);
+  return note;
+}
+
+export async function markAllNotificationsRead(email: string) {
+  const state = await ensureStore();
+  const key = normalizeEmail(email);
+  for (const note of state.notifications ?? []) {
+    if (note.email === key) note.read = true;
+  }
+  bump(state);
+  return { ok: true as const };
+}
+
+export async function broadcastNotification(
+  actorEmail: string,
+  input: { title: string; body: string; link?: string; targetEmail?: string },
+) {
+  await assertAdmin(actorEmail);
+  const state = await ensureStore();
+  const title = input.title.trim();
+  const body = input.body.trim();
+  if (title.length < 2 || body.length < 4) {
+    throw new Error("Enter a title and message.");
+  }
+
+  const targets = input.targetEmail?.trim()
+    ? [normalizeEmail(input.targetEmail)]
+    : state.accounts.filter((a) => a.role === "tourist").map((a) => a.email);
+
+  if (!targets.length) throw new Error("No travellers to notify yet.");
+
+  for (const email of targets) {
+    pushNotification(state, {
+      email,
+      title,
+      body,
+      link: input.link?.trim() || "/dashboard",
+      kind: "message",
+    });
+  }
+  bump(state);
+  return { sent: targets.length };
 }

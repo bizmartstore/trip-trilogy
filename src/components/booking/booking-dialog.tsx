@@ -1,12 +1,23 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { motion } from "motion/react";
-import { CalendarDays, CheckCircle2, Download, Loader2, MessageSquare, Phone, QrCode } from "lucide-react";
+import {
+  CalendarDays,
+  CheckCircle2,
+  Download,
+  ExternalLink,
+  Loader2,
+  LogIn,
+  MessageSquare,
+  Phone,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 
+import { BookingQrCode } from "@/components/booking/booking-qr-code";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -33,6 +44,12 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { createBooking, fetchSettings } from "@/lib/api";
+import {
+  bookingStatusLabel,
+  downloadBookingReceipt,
+  generateBookingQrDataUrl,
+} from "@/lib/booking-receipt";
+import { bookingConfirmationPath } from "@/lib/booking-url";
 import type { Booking, Listing } from "@/lib/types";
 import { peso } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
@@ -62,6 +79,7 @@ export function BookingDialog({
   total: number;
 }) {
   const [confirmed, setConfirmed] = useState<Booking | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const { user } = useAuth();
   const settings = useQuery({ queryKey: ["hub-settings"], queryFn: fetchSettings });
 
@@ -120,6 +138,23 @@ export function BookingDialog({
     }
   };
 
+  const handleReceiptDownload = async () => {
+    if (!confirmed) return;
+    setDownloading(true);
+    try {
+      const qrDataUrl = await generateBookingQrDataUrl(confirmed.reference);
+      await downloadBookingReceipt(confirmed, {
+        qrDataUrl,
+        settings: settings.data,
+      });
+      toast.success("Receipt downloaded");
+    } catch {
+      toast.error("Could not generate receipt. Please try again.");
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   const countdown = confirmed
     ? Math.max(
         0,
@@ -155,12 +190,26 @@ export function BookingDialog({
             </DialogHeader>
 
             <div className="mt-6 rounded-3xl border border-dashed border-border bg-secondary/40 p-6">
-              <div className="mx-auto grid size-28 place-items-center rounded-2xl bg-card">
-                <QrCode className="size-20" />
+              <div className="mx-auto grid size-32 place-items-center rounded-2xl bg-card p-2">
+                <BookingQrCode reference={confirmed.reference} size={112} className="rounded-lg" />
               </div>
-              <p className="mt-4 font-mono text-lg font-semibold tracking-wider">
+              <p className="mt-2 text-xs text-muted-foreground">
+                Scan this code to open your live reservation details — listing, date, guests, total,
+                and status.
+              </p>
+              <p className="mt-3 font-mono text-lg font-semibold tracking-wider">
                 {confirmed.reference}
               </p>
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="mt-2 h-8 rounded-full text-xs text-muted-foreground"
+              >
+                <Link to={bookingConfirmationPath(confirmed.reference)} target="_blank">
+                  <ExternalLink className="size-3.5" /> Open confirmation page
+                </Link>
+              </Button>
               <Separator className="my-4" />
               <dl className="space-y-2 text-left text-sm">
                 <Row label="Listing" value={confirmed.listingTitle} />
@@ -168,15 +217,31 @@ export function BookingDialog({
                 <Row label="Guests" value={String(confirmed.guests)} />
                 <Row label="Total" value={peso(confirmed.total)} />
                 <Row label="Payment" value={confirmed.paid ? "Paid" : "Pay on arrival"} />
-                <Row label="Status" value="Pending admin approval" />
+                <Row label="Status" value={bookingStatusLabel(confirmed.status)} />
               </dl>
             </div>
+
+            {!user ? (
+              <div className="mt-4 rounded-3xl border border-primary/20 bg-primary/5 p-5 text-left">
+                <p className="text-sm font-semibold">Sign in to unlock the full app</p>
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  Create a free account or sign in to track this reservation, get approval updates,
+                  save favourites, and manage all your Palawan trips in one place.
+                </p>
+                <Button asChild variant="hero" className="mt-4 w-full rounded-full">
+                  <Link to="/auth">
+                    <LogIn className="size-4" /> Sign in or sign up
+                  </Link>
+                </Button>
+              </div>
+            ) : null}
 
             <div className="mt-4 rounded-3xl border border-border bg-card p-5 text-left">
               <p className="text-sm font-semibold">What happens next</p>
               <ol className="mt-3 space-y-2 text-sm text-muted-foreground">
                 <li>
-                  1. Your reservation is now <strong className="text-foreground">pending admin approval</strong>.
+                  1. Your reservation is now{" "}
+                  <strong className="text-foreground">pending admin approval</strong>.
                 </li>
                 <li>
                   2. Our team will <strong className="text-foreground">call or send you a text message</strong>{" "}
@@ -224,9 +289,15 @@ export function BookingDialog({
               <Button
                 variant="outline"
                 className="flex-1 rounded-full"
-                onClick={() => toast.success("Reference copied to your receipt")}
+                disabled={downloading}
+                onClick={() => void handleReceiptDownload()}
               >
-                <Download className="size-4" /> Receipt
+                {downloading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Download className="size-4" />
+                )}
+                Download receipt
               </Button>
               <Button variant="hero" className="flex-1 rounded-full" onClick={() => close(false)}>
                 Done
@@ -254,7 +325,7 @@ export function BookingDialog({
                     <FormItem>
                       <FormLabel>Full name</FormLabel>
                       <FormControl>
-                        <Input placeholder="Amara Devi" className="h-11 rounded-xl" {...field} />
+                        <Input placeholder="Your full name" className="h-11 rounded-xl" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -281,7 +352,7 @@ export function BookingDialog({
                       <FormItem>
                         <FormLabel>Phone</FormLabel>
                         <FormControl>
-                          <Input placeholder="+65 9123 4567" className="h-11 rounded-xl" {...field} />
+                          <Input placeholder="+63 917 000 0000" className="h-11 rounded-xl" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>

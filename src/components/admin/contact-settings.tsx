@@ -18,6 +18,9 @@ const empty: HubSettings = {
   contactEmail: "",
   officeHours: "",
   bookingNotice: "",
+  socialInstagram: "",
+  socialTwitter: "",
+  socialFacebook: "",
 };
 
 export function ContactSettings({ actorEmail }: { actorEmail: string }) {
@@ -105,6 +108,41 @@ export function ContactSettings({ actorEmail }: { actorEmail: string }) {
           placeholder="Our team will call or text you once your reservation is approved."
         />
       </Field>
+
+      <div className="rounded-2xl border border-border bg-secondary/30 p-5">
+        <h3 className="font-display text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+          Social media links
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Leave blank to hide an icon in the footer. Enter the full URL (https://…).
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <Field label="Instagram">
+            <Input
+              className="h-11 rounded-xl"
+              value={form.socialInstagram ?? ""}
+              onChange={(e) => setForm({ ...form, socialInstagram: e.target.value })}
+              placeholder="https://instagram.com/nexora"
+            />
+          </Field>
+          <Field label="X (Twitter)">
+            <Input
+              className="h-11 rounded-xl"
+              value={form.socialTwitter ?? ""}
+              onChange={(e) => setForm({ ...form, socialTwitter: e.target.value })}
+              placeholder="https://x.com/nexora"
+            />
+          </Field>
+          <Field label="Facebook">
+            <Input
+              className="h-11 rounded-xl"
+              value={form.socialFacebook ?? ""}
+              onChange={(e) => setForm({ ...form, socialFacebook: e.target.value })}
+              placeholder="https://facebook.com/nexora"
+            />
+          </Field>
+        </div>
+      </div>
 
       <Button
         variant="hero"

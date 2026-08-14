@@ -37,8 +37,18 @@ create index if not exists bookings_created_at_idx on public.bookings (created_a
 grant all on public.bookings to service_role;
 alter table public.bookings enable row level security;
 
--- 3. Optional: realtime broadcast for the bookings table
-alter publication supabase_realtime add table public.bookings;
+-- 3. Optional: realtime broadcast for the bookings table (safe to re-run)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'bookings'
+  ) then
+    alter publication supabase_realtime add table public.bookings;
+  end if;
+end $$;
 
 -- 4. Approval workflow metadata on bookings (safe to re-run)
 alter table public.bookings add column if not exists customer_phone text;
@@ -69,7 +79,22 @@ create index if not exists accounts_role_idx on public.accounts (role);
 grant all on public.accounts to service_role;
 alter table public.accounts enable row level security;
 
+-- Optional one-time cleanup for seeded demo reservations (safe to re-run)
+delete from public.bookings
+where reference in (
+  'EXH-4821-COR',
+  'EXH-7710-ELN',
+  'EXH-2093-PPS',
+  'EXH-5512-ELN',
+  'EXH-3388-SVT'
+);
+
 -- The main administrator email is always an admin
 insert into public.accounts (email, name, role)
 values ('sheethappenswithjaa@gmail.com', 'Main Admin', 'admin')
 on conflict (email) do update set role = 'admin';
+
+-- One-time cleanup: demote accounts that were incorrectly saved as admin.
+-- Invited admins are re-promoted via hub_state.adminInvites on next sign-in.
+update public.accounts set role = 'tourist'
+where lower(email) <> 'sheethappenswithjaa@gmail.com' and role = 'admin';

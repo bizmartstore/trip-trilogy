@@ -2,7 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
-import { applyCloudflareEnv, bindWorkerEnv } from "./lib/worker-env";
+import { applyCloudflareEnv, bindWorkerEnv, resolveWorkerBindings } from "./lib/worker-env";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -47,15 +47,16 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    // Bind wrangler secrets first — they are non-enumerable on `env`.
-    bindWorkerEnv(env);
+    // Nitro's SSR bridge often calls fetch(request) without env — use __env__ fallback.
+    const bindings = resolveWorkerBindings(env);
+    bindWorkerEnv(bindings);
     applyCloudflareEnv(
-      env,
+      bindings,
       ctx as { waitUntil?: (promise: Promise<unknown>) => void },
     );
     try {
       const handler = await getServerEntry();
-      const response = await handler.fetch(request, env, ctx);
+      const response = await handler.fetch(request, bindings ?? env, ctx);
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error(error);
