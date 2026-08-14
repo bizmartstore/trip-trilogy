@@ -3,9 +3,11 @@ import { Facebook, Instagram, Mail, MapPin, Phone, Twitter } from "lucide-react"
 import nexoraLogo from "@/assets/nexora-logo.png.asset.json";
 import { toast } from "sonner";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { fetchSettings } from "@/lib/api";
 
 const columns = [
   {
@@ -29,16 +31,18 @@ const columns = [
   {
     title: "Support",
     links: [
-      { label: "Help centre", to: "/explore" as const },
-      { label: "Cancellation policy", to: "/explore" as const },
-      { label: "Privacy policy", to: "/explore" as const },
-      { label: "Terms of service", to: "/explore" as const },
+      { label: "Help centre", to: "/help-centre" as const },
+      { label: "Cancellation policy", to: "/cancellation-policy" as const },
+      { label: "Privacy policy", to: "/privacy-policy" as const },
+      { label: "Terms of service", to: "/terms-of-service" as const },
     ],
   },
 ];
 
 export function Footer() {
   const [email, setEmail] = useState("");
+  const settings = useQuery({ queryKey: ["hub-settings"], queryFn: fetchSettings });
+  const contact = settings.data;
 
   return (
     <footer className="mt-24 bg-deep text-deep-foreground">
@@ -87,14 +91,14 @@ export function Footer() {
 
             <div className="mt-7 space-y-2 text-sm text-deep-foreground/70">
               <p className="flex items-center gap-2">
-                <MapPin className="size-4 shrink-0" /> 14 Harbour Walk, Singapore 099253
+                <MapPin className="size-4 shrink-0" /> {contact?.contactAddress ?? "Palawan, Philippines"}
               </p>
-              <p className="flex items-center gap-2">
-                <Phone className="size-4 shrink-0" /> +65 6555 0110
-              </p>
-              <p className="flex items-center gap-2">
-                <Mail className="size-4 shrink-0" /> hello@nexora.travel
-              </p>
+              <a className="flex items-center gap-2 hover:text-deep-foreground" href={`tel:${contact?.contactPhone ?? "+639990000000"}`}>
+                <Phone className="size-4 shrink-0" /> {contact?.contactPhone ?? "+63 999 000 0000"}
+              </a>
+              <a className="flex items-center gap-2 hover:text-deep-foreground" href={`mailto:${contact?.contactEmail ?? "sheethappenswithjaa@gmail.com"}`}>
+                <Mail className="size-4 shrink-0" /> {contact?.contactEmail ?? "sheethappenswithjaa@gmail.com"}
+              </a>
             </div>
           </div>
 

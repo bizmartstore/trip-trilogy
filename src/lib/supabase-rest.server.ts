@@ -5,8 +5,10 @@
  */
 
 function config() {
-  const url = process.env["EXPLOREHUB_SUPABASE_URL"];
-  const key = process.env["EXPLOREHUB_SUPABASE_SERVICE_ROLE_KEY"];
+  const url = process.env["NEXORA_SUPABASE_URL"] ?? process.env["EXPLOREHUB_SUPABASE_URL"];
+  const key =
+    process.env["NEXORA_SUPABASE_SERVICE_ROLE_KEY"] ??
+    process.env["EXPLOREHUB_SUPABASE_SERVICE_ROLE_KEY"];
   if (!url || !key) return null;
   return { url: url.replace(/\/$/, ""), key };
 }

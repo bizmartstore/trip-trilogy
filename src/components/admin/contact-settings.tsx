@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Phone } from "lucide-react";
+import { Loader2, MapPin, Phone } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ import { fetchSettings, updateSettings } from "@/lib/api";
 import type { HubSettings } from "@/lib/types";
 
 const empty: HubSettings = {
+  contactAddress: "",
   contactPhone: "",
   contactMobile: "",
   contactEmail: "",
@@ -48,6 +49,18 @@ export function ContactSettings({ actorEmail }: { actorEmail: string }) {
           guests know exactly who to call or text for follow-ups.
         </p>
       </div>
+
+      <Field label="Office address">
+        <div className="relative">
+          <MapPin className="pointer-events-none absolute left-3 top-3.5 size-4 text-muted-foreground" />
+          <Input
+            className="h-11 rounded-xl pl-10"
+            value={form.contactAddress}
+            onChange={(e) => setForm({ ...form, contactAddress: e.target.value })}
+            placeholder="Palawan, Philippines"
+          />
+        </div>
+      </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Hotline (calls)">

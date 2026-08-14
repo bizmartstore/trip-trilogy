@@ -325,6 +325,7 @@ export const updateSettingsFn = createServerFn({ method: "POST" })
         actorEmail: emailSchema,
         patch: z
           .object({
+            contactAddress: z.string().trim().max(240).optional(),
             contactPhone: z.string().trim().max(40).optional(),
             contactMobile: z.string().trim().max(40).optional(),
             contactEmail: z.string().trim().max(160).optional(),
