@@ -20,9 +20,11 @@ import { Route as PlannerRouteImport } from './routes/planner'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as ListingSlugRouteImport } from './routes/listing.$slug'
+import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
 import { Route as ApiAuthOauthRouteImport } from './routes/api/auth/oauth'
 import { Route as ApiAuthRegisterRouteImport } from './routes/api/auth/register'
 import { Route as ApiAuthSignInRouteImport } from './routes/api/auth/sign-in'
+import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
 import { Route as ApiPublicKeepaliveRouteImport } from './routes/api/public/keepalive'
 
 const IndexRoute = IndexRouteImport.update({
@@ -80,6 +82,11 @@ const ListingSlugRoute = ListingSlugRouteImport.update({
   path: '/listing/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthMeRoute = ApiAuthMeRouteImport.update({
+  id: '/api/auth/me',
+  path: '/api/auth/me',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthOauthRoute = ApiAuthOauthRouteImport.update({
   id: '/api/auth/oauth',
   path: '/api/auth/oauth',
@@ -93,6 +100,11 @@ const ApiAuthRegisterRoute = ApiAuthRegisterRouteImport.update({
 const ApiAuthSignInRoute = ApiAuthSignInRouteImport.update({
   id: '/api/auth/sign-in',
   path: '/api/auth/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAuthSignOutRoute = ApiAuthSignOutRouteImport.update({
+  id: '/api/auth/sign-out',
+  path: '/api/auth/sign-out',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicKeepaliveRoute = ApiPublicKeepaliveRouteImport.update({
@@ -113,9 +125,11 @@ export interface FileRoutesByFullPath {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/listing/$slug': typeof ListingSlugRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/oauth': typeof ApiAuthOauthRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
+  '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
 export interface FileRoutesByTo {
@@ -130,9 +144,11 @@ export interface FileRoutesByTo {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/listing/$slug': typeof ListingSlugRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/oauth': typeof ApiAuthOauthRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
+  '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
 export interface FileRoutesById {
@@ -148,9 +164,11 @@ export interface FileRoutesById {
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
   '/listing/$slug': typeof ListingSlugRoute
+  '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/oauth': typeof ApiAuthOauthRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
+  '/api/auth/sign-out': typeof ApiAuthSignOutRoute
   '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
 export interface FileRouteTypes {
@@ -167,9 +185,11 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/terms-of-service'
     | '/listing/$slug'
+    | '/api/auth/me'
     | '/api/auth/oauth'
     | '/api/auth/register'
     | '/api/auth/sign-in'
+    | '/api/auth/sign-out'
     | '/api/public/keepalive'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -184,9 +204,11 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/terms-of-service'
     | '/listing/$slug'
+    | '/api/auth/me'
     | '/api/auth/oauth'
     | '/api/auth/register'
     | '/api/auth/sign-in'
+    | '/api/auth/sign-out'
     | '/api/public/keepalive'
   id:
     | '__root__'
@@ -201,9 +223,11 @@ export interface FileRouteTypes {
     | '/privacy-policy'
     | '/terms-of-service'
     | '/listing/$slug'
+    | '/api/auth/me'
     | '/api/auth/oauth'
     | '/api/auth/register'
     | '/api/auth/sign-in'
+    | '/api/auth/sign-out'
     | '/api/public/keepalive'
   fileRoutesById: FileRoutesById
 }
@@ -219,9 +243,11 @@ export interface RootRouteChildren {
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   TermsOfServiceRoute: typeof TermsOfServiceRoute
   ListingSlugRoute: typeof ListingSlugRoute
+  ApiAuthMeRoute: typeof ApiAuthMeRoute
   ApiAuthOauthRoute: typeof ApiAuthOauthRoute
   ApiAuthRegisterRoute: typeof ApiAuthRegisterRoute
   ApiAuthSignInRoute: typeof ApiAuthSignInRoute
+  ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
   ApiPublicKeepaliveRoute: typeof ApiPublicKeepaliveRoute
 }
 
@@ -304,6 +330,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ListingSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/me': {
+      id: '/api/auth/me'
+      path: '/api/auth/me'
+      fullPath: '/api/auth/me'
+      preLoaderRoute: typeof ApiAuthMeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/oauth': {
       id: '/api/auth/oauth'
       path: '/api/auth/oauth'
@@ -323,6 +356,13 @@ declare module '@tanstack/react-router' {
       path: '/api/auth/sign-in'
       fullPath: '/api/auth/sign-in'
       preLoaderRoute: typeof ApiAuthSignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/auth/sign-out': {
+      id: '/api/auth/sign-out'
+      path: '/api/auth/sign-out'
+      fullPath: '/api/auth/sign-out'
+      preLoaderRoute: typeof ApiAuthSignOutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/keepalive': {
@@ -347,9 +387,11 @@ const rootRouteChildren: RootRouteChildren = {
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   TermsOfServiceRoute: TermsOfServiceRoute,
   ListingSlugRoute: ListingSlugRoute,
+  ApiAuthMeRoute: ApiAuthMeRoute,
   ApiAuthOauthRoute: ApiAuthOauthRoute,
   ApiAuthRegisterRoute: ApiAuthRegisterRoute,
   ApiAuthSignInRoute: ApiAuthSignInRoute,
+  ApiAuthSignOutRoute: ApiAuthSignOutRoute,
   ApiPublicKeepaliveRoute: ApiPublicKeepaliveRoute,
 }
 export const routeTree = rootRouteImport

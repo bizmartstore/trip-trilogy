@@ -1,14 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { prepareAuthRequest } from "@/lib/auth-route.server";
 import { signInAccount } from "@/lib/store.server";
-import { syncEnvFromGlobal } from "@/lib/worker-env";
+import { createSessionToken, jsonWithSession } from "@/lib/session.server";
 
-/** Password sign-in via API route — keeps Worker secrets in scope. */
+/** Password sign-in — validates against Supabase and sets an HTTP-only session cookie. */
 export const Route = createFileRoute("/api/auth/sign-in")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        syncEnvFromGlobal();
+        const ready = prepareAuthRequest();
+        if (!ready.ok) return ready.response;
+
         let body: unknown;
         try {
           body = await request.json();
@@ -25,8 +28,14 @@ export const Route = createFileRoute("/api/auth/sign-in")({
             { status: 400 },
           );
         }
+
         const result = await signInAccount({ email, password });
-        return Response.json(result, { status: result.ok ? 200 : 400 });
+        if (!result.ok) {
+          return Response.json(result, { status: 400 });
+        }
+
+        const token = await createSessionToken(result.account.email);
+        return jsonWithSession({ ok: true, account: result.account }, token, request);
       },
     },
   },

@@ -10,5 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Ping published Nexora endpoint
-        run: curl --fail --show-error --silent --retry 2 https://trip-trilogy.lovable.app/api/public/keepalive
+      - name: Ping Cloudflare Worker keepalive
+        env:
+          NEXORA_WORKER_URL: ${{ secrets.NEXORA_WORKER_URL }}
+        run: |
+          URL="${NEXORA_WORKER_URL:-https://trip-trilogy.workers.dev}"
+          echo "Pinging $URL/api/public/keepalive"
+          curl --fail --show-error --silent --retry 2 "$URL/api/public/keepalive"

@@ -2,7 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
-import { applyCloudflareEnv } from "./lib/worker-env";
+import { applyCloudflareEnv, bindWorkerEnv } from "./lib/worker-env";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -47,7 +47,8 @@ function isH3SwallowedErrorBody(body: string): boolean {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
-    // Nitro also sets globalThis.__env__; keep both paths in sync for server fns.
+    // Bind wrangler secrets first — they are non-enumerable on `env`.
+    bindWorkerEnv(env);
     applyCloudflareEnv(
       env,
       ctx as { waitUntil?: (promise: Promise<unknown>) => void },

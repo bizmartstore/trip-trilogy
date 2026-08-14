@@ -252,7 +252,7 @@ async function postAuthJson<T>(path: string, body: unknown): Promise<T> {
     throw new Error(
       res.ok
         ? "Unexpected auth response."
-        : `Auth request failed (${res.status}). Try refreshing the page.`,
+        : `Auth request failed (${res.status}). The Cloudflare Worker may be down or missing secrets — check /api/public/keepalive.`,
     );
   }
   return parsed as T;
@@ -263,20 +263,11 @@ export async function registerAccount(input: {
   email: string;
   password: string;
 }) {
-  // Prefer the API route (same Worker path as keepalive) so secrets stay in scope.
-  try {
-    return await postAuthJson<Awaited<ReturnType<typeof registerFn>>>("/api/auth/register", input);
-  } catch {
-    return registerFn({ data: input });
-  }
+  return postAuthJson<Awaited<ReturnType<typeof registerFn>>>("/api/auth/register", input);
 }
 
 export async function signInAccount(input: { email: string; password: string }) {
-  try {
-    return await postAuthJson<Awaited<ReturnType<typeof signInFn>>>("/api/auth/sign-in", input);
-  } catch {
-    return signInFn({ data: input });
-  }
+  return postAuthJson<Awaited<ReturnType<typeof signInFn>>>("/api/auth/sign-in", input);
 }
 
 export async function oauthSignIn(input: {
@@ -290,21 +281,13 @@ export async function oauthSignIn(input: {
     email: input.email,
     picture: input.picture,
   };
-  try {
-    const result = await postAuthJson<
-      Awaited<ReturnType<typeof oauthSignInFn>> | { error: string }
-    >("/api/auth/oauth", payload);
-    if (result && typeof result === "object" && "error" in result && !("email" in result)) {
-      throw new Error(String((result as { error: string }).error));
-    }
-    return result as Awaited<ReturnType<typeof oauthSignInFn>>;
-  } catch (apiError) {
-    try {
-      return await oauthSignInFn({ data: payload });
-    } catch {
-      throw apiError instanceof Error ? apiError : new Error("Sign-in failed.");
-    }
+  const result = await postAuthJson<
+    Awaited<ReturnType<typeof oauthSignInFn>> | { error: string }
+  >("/api/auth/oauth", payload);
+  if (result && typeof result === "object" && "error" in result && !("email" in result)) {
+    throw new Error(String((result as { error: string }).error));
   }
+  return result as Awaited<ReturnType<typeof oauthSignInFn>>;
 }
 
 export async function inviteAdmin(actorEmail: string, inviteEmail: string) {

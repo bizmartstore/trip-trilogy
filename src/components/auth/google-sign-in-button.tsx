@@ -3,7 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 
 import { getGoogleClientId } from "@/lib/google-auth.functions";
-import { decodeIdToken, signInUser } from "@/hooks/use-auth";
+import { decodeIdToken, notifyAuthChanged } from "@/hooks/use-auth";
 import { oauthSignIn } from "@/lib/api";
 import { isMainAdminEmail } from "@/lib/constants";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -70,12 +70,7 @@ export function GoogleSignInButton() {
                 email: profile.email,
                 picture: profile.picture,
               });
-              signInUser({
-                name: account.name,
-                email: account.email,
-                picture: account.picture,
-                role: account.role,
-              });
+              notifyAuthChanged();
               toast.success(`Welcome, ${account.name}`);
               navigate({
                 to: account.role === "admin" ? "/admin" : "/dashboard",

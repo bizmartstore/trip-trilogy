@@ -7,26 +7,25 @@ export interface AuthUser {
   role: "tourist" | "admin";
 }
 
-const KEY = "nexora.user";
 const EVENT = "nexora-auth";
 
-function read(): AuthUser | null {
+async function fetchSession(): Promise<AuthUser | null> {
   try {
-    if (typeof localStorage === "undefined") return null;
-    const raw = localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
+    const res = await fetch("/api/auth/me", {
+      credentials: "same-origin",
+      headers: { accept: "application/json" },
+    });
+    if (res.status === 401) return null;
+    if (!res.ok) return null;
+    const data = (await res.json()) as { user?: AuthUser | null };
+    return data.user ?? null;
   } catch {
     return null;
   }
 }
 
-export function signInUser(user: AuthUser) {
-  localStorage.setItem(KEY, JSON.stringify(user));
-  window.dispatchEvent(new Event(EVENT));
-}
-
-export function signOutUser() {
-  localStorage.removeItem(KEY);
+/** Tell all useAuth hooks to reload the session from the server (cookie already set). */
+export function notifyAuthChanged() {
   window.dispatchEvent(new Event(EVENT));
 }
 
@@ -34,21 +33,36 @@ export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
 
-  useEffect(() => {
-    setUser(read());
+  const refresh = useCallback(async () => {
+    const session = await fetchSession();
+    setUser(session);
     setReady(true);
-    const sync = () => setUser(read());
-    window.addEventListener(EVENT, sync);
-    window.addEventListener("storage", sync);
-    return () => {
-      window.removeEventListener(EVENT, sync);
-      window.removeEventListener("storage", sync);
-    };
+    return session;
   }, []);
 
-  const signOut = useCallback(() => signOutUser(), []);
+  useEffect(() => {
+    refresh();
+    const sync = () => {
+      refresh();
+    };
+    window.addEventListener(EVENT, sync);
+    return () => window.removeEventListener(EVENT, sync);
+  }, [refresh]);
 
-  return { user, ready, signOut, isAdmin: user?.role === "admin" };
+  const signOut = useCallback(async () => {
+    try {
+      await fetch("/api/auth/sign-out", {
+        method: "POST",
+        credentials: "same-origin",
+      });
+    } catch {
+      // Still clear local state if the network call fails.
+    }
+    setUser(null);
+    window.dispatchEvent(new Event(EVENT));
+  }, []);
+
+  return { user, ready, signOut, refresh, isAdmin: user?.role === "admin" };
 }
 
 /** Decode the payload of a Google ID token (JWT) without verifying it. */

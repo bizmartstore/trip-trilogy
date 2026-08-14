@@ -1,10 +1,17 @@
 # Cloudflare Worker deploy for Nexora (TanStack Start + Nitro).
-# Secrets (do not put these in this file) — required for sign-up / sign-in:
+#
+# Required secrets (never commit values here):
 #   wrangler secret put NEXORA_SUPABASE_SERVICE_ROLE_KEY
-#   (optional alias) wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-#   wrangler secret put GOOGLE_OAUTH_CLIENT_ID
-# Also add the same names in Lovable → Cloud → Secrets, then Publish.
-# Lovable auto SUPABASE_* Edge Function secrets are NOT injected into this Worker.
+#   wrangler secret put GOOGLE_OAUTH_CLIENT_ID   # optional, for Google sign-in
+#
+# Or add GitHub Actions secrets (recommended — deploy workflow syncs them):
+#   NEXORA_SUPABASE_SERVICE_ROLE_KEY
+#   GOOGLE_OAUTH_CLIENT_ID
+#   CLOUDFLARE_API_TOKEN
+#   CLOUDFLARE_ACCOUNT_ID
+#   NEXORA_WORKER_URL   # e.g. https://trip-trilogy.workers.dev or your custom domain
+#
+# Local dev: copy .env.example to .dev.vars
 name = "trip-trilogy"
 main = ".output/server/index.mjs"
 compatibility_date = "2026-08-14"
@@ -18,3 +25,8 @@ binding = "ASSETS"
 NEXORA_SUPABASE_URL = "https://aeynekfhnzjcimskwouw.supabase.co"
 SUPABASE_URL = "https://aeynekfhnzjcimskwouw.supabase.co"
 VITE_SUPABASE_URL = "https://aeynekfhnzjcimskwouw.supabase.co"
+
+# Optional: attach a custom domain (uncomment and set your route)
+# [[routes]]
+# pattern = "nexora.example.com/*"
+# zone_name = "example.com"

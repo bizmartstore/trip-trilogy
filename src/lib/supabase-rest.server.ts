@@ -30,7 +30,7 @@ export function supabaseConfigured() {
 }
 
 export function supabaseMissingConfigMessage() {
-  return "Account database is not connected. Set the secret NEXORA_SUPABASE_SERVICE_ROLE_KEY on the Cloudflare Worker (wrangler secret put NEXORA_SUPABASE_SERVICE_ROLE_KEY) and in Lovable → Cloud → Secrets, then republish. Use the service_role key from Supabase → Project Settings → API.";
+  return "Account database is not connected. Set NEXORA_SUPABASE_SERVICE_ROLE_KEY on your Cloudflare Worker: run `wrangler secret put NEXORA_SUPABASE_SERVICE_ROLE_KEY` (or add it as a GitHub Actions secret so deploy syncs it), then redeploy. Use the service_role key from Supabase → Project Settings → API.";
 }
 
 async function rest(path: string, init: RequestInit = {}) {
@@ -38,7 +38,7 @@ async function rest(path: string, init: RequestInit = {}) {
   if (!cfg) throw new Error("Supabase is not configured");
   const headers = new Headers(init.headers);
   headers.set("apikey", cfg.key);
-  if (!cfg.key.startsWith("sb_")) headers.set("Authorization", `Bearer ${cfg.key}`);
+  headers.set("Authorization", `Bearer ${cfg.key}`);
   headers.set("Content-Type", "application/json");
   const res = await fetch(`${cfg.url}/rest/v1/${path}`, { ...init, headers });
   if (!res.ok) {

@@ -1,14 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { prepareAuthRequest } from "@/lib/auth-route.server";
 import { upsertOAuthAccount } from "@/lib/store.server";
-import { syncEnvFromGlobal } from "@/lib/worker-env";
+import { createSessionToken, jsonWithSession } from "@/lib/session.server";
 
-/** Google / OAuth upsert via API route — keeps Worker secrets in scope. */
+/** Google / OAuth upsert — persists to Supabase and sets an HTTP-only session cookie. */
 export const Route = createFileRoute("/api/auth/oauth")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        syncEnvFromGlobal();
+        const ready = prepareAuthRequest();
+        if (!ready.ok) return ready.response;
+
         let body: unknown;
         try {
           body = await request.json();
@@ -24,9 +27,11 @@ export const Route = createFileRoute("/api/auth/oauth")({
         if (!name || !email.includes("@")) {
           return Response.json({ error: "Enter a valid name and email." }, { status: 400 });
         }
+
         try {
           const account = await upsertOAuthAccount({ name, email, picture });
-          return Response.json(account);
+          const token = await createSessionToken(account.email);
+          return jsonWithSession(account, token, request);
         } catch (error) {
           return Response.json(
             { error: error instanceof Error ? error.message : "Sign-in failed." },

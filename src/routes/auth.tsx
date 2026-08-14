@@ -21,7 +21,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import heroImage from "@/assets/hero.jpg";
 import { GoogleSignInButton } from "@/components/auth/google-sign-in-button";
-import { signInUser } from "@/hooks/use-auth";
+import { notifyAuthChanged } from "@/hooks/use-auth";
 import { registerAccount, signInAccount } from "@/lib/api";
 import { isMainAdminEmail } from "@/lib/constants";
 
@@ -68,12 +68,7 @@ function Auth() {
   });
 
   const afterAuth = (account: { name: string; email: string; role: "tourist" | "admin"; picture?: string }) => {
-    signInUser({
-      name: account.name,
-      email: account.email,
-      role: account.role,
-      picture: account.picture,
-    });
+    notifyAuthChanged();
     if (account.role === "admin") {
       toast.success(
         isMainAdminEmail(account.email)

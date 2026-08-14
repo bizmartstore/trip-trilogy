@@ -1,17 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { prepareAuthRequest } from "@/lib/auth-route.server";
 import { registerAccount } from "@/lib/store.server";
-import { syncEnvFromGlobal } from "@/lib/worker-env";
+import { createSessionToken, jsonWithSession } from "@/lib/session.server";
 
-/**
- * Password sign-up via a plain API route (same path style as keepalive).
- * Prefer this over createServerFn so Worker secrets are always in scope.
- */
+/** Password sign-up — persists to Supabase and sets an HTTP-only session cookie. */
 export const Route = createFileRoute("/api/auth/register")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        syncEnvFromGlobal();
+        const ready = prepareAuthRequest();
+        if (!ready.ok) return ready.response;
+
         let body: unknown;
         try {
           body = await request.json();
@@ -29,8 +29,14 @@ export const Route = createFileRoute("/api/auth/register")({
             { status: 400 },
           );
         }
+
         const result = await registerAccount({ name, email, password });
-        return Response.json(result, { status: result.ok ? 200 : 400 });
+        if (!result.ok) {
+          return Response.json(result, { status: 400 });
+        }
+
+        const token = await createSessionToken(result.account.email);
+        return jsonWithSession({ ok: true, account: result.account }, token, request);
       },
     },
   },
