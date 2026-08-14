@@ -46,6 +46,7 @@ type GlobalStore = typeof globalThis & {
 };
 
 export const defaultSettings: HubSettings = {
+  contactAddress: "Palawan, Philippines",
   contactPhone: "+63 999 000 0000",
   contactMobile: "+63 999 000 0000",
   contactEmail: "sheethappenswithjaa@gmail.com",

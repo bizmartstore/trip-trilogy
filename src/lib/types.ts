@@ -130,6 +130,8 @@ export interface Testimonial {
 }
 
 export interface HubSettings {
+  /** Public office or mailing address shown in the footer. */
+  contactAddress: string;
   /** Primary number tourists can call for booking follow-ups. */
   contactPhone: string;
   /** Number that accepts SMS / Viber / WhatsApp messages. */
