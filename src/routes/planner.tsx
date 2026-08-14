@@ -17,9 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { listings } from "@/data/catalog";
 import { destinationOptions, tagOptions } from "@/lib/api";
-import type { Listing } from "@/lib/types";
+import {
+  buildPlan,
+  
+  type PlanInput,
+  type PlanOutput,
+  type PlanSuggestion,
+} from "@/lib/planner";
 import { peso } from "@/lib/utils";
 
 export const Route = createFileRoute("/planner")({
@@ -206,7 +211,7 @@ function Planner() {
                 </div>
               </div>
 
-              <Button variant="hero" size="lg" className="w-full rounded-full" onClick={build} disabled={building}>
+              <Button variant="hero" size="lg" className="w-full rounded-full" onClick={() => build()} disabled={building}>
                 {building ? (
                   <>
                     <Loader2 className="size-4 animate-spin" /> Building itinerary…
@@ -250,38 +255,86 @@ function Planner() {
 
             {plan && !building ? (
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-3xl border border-border bg-card p-6 shadow-soft">
-                  <div className="min-w-0">
-                    <p className="text-sm text-muted-foreground">Estimated trip cost</p>
-                    <p className="font-display text-3xl font-semibold">
-                      {peso(Math.round(estimate))}
+                {best ? (
+                  <>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-3xl border border-border bg-card p-6 shadow-soft">
+                      <div className="min-w-0">
+                        <p className="text-sm text-muted-foreground">Estimated trip cost</p>
+                        <p className="font-display text-3xl font-semibold">
+                          {peso(Math.round(estimate))}
+                        </p>
+                        <Badge
+                          className={`mt-2 rounded-full border-0 ${
+                            withinBudget
+                              ? "bg-success text-success-foreground"
+                              : "bg-destructive text-destructive-foreground"
+                          }`}
+                        >
+                          {withinBudget
+                            ? `${peso(Math.round(budget - estimate))} under budget · ${Math.round(
+                                best.utilisation * 100,
+                              )}% used`
+                            : `${peso(Math.round(estimate - budget))} over budget`}
+                        </Badge>
+                      </div>
+                      <Button
+                        variant="outline"
+                        className="shrink-0 rounded-full"
+                        onClick={() => build()}
+                      >
+                        <RefreshCw className="size-4" /> Reshuffle
+                      </Button>
+                    </div>
+
+                    <div className="mt-6 grid gap-6 sm:grid-cols-2">
+                      {best.items.map((l, i) => (
+                        <ListingCard key={l.id} listing={l} index={i} />
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="rounded-3xl border border-border bg-card p-6 shadow-soft">
+                    <p className="text-sm text-muted-foreground">
+                      Nothing in {destination} fits {peso(budget)} for {nights} night
+                      {nights > 1 ? "s" : ""} and {travellers} traveller
+                      {travellers > 1 ? "s" : ""}.
+                      {plan.cheapestTotal
+                        ? ` The closest itinerary costs ${peso(Math.round(plan.cheapestTotal))}.`
+                        : ""}
                     </p>
-                    <Badge
-                      className={`mt-2 rounded-full border-0 ${
-                        withinBudget ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"
-                      }`}
-                    >
-                      {withinBudget
-                        ? `${peso(Math.round(budget - estimate))} under budget`
-                        : `${peso(Math.round(estimate - budget))} over budget`}
-                    </Badge>
+
+                    {plan.suggestions.length ? (
+                      <div className="mt-5 space-y-3">
+                        <p className="text-sm font-semibold">Closest alternatives</p>
+                        {plan.suggestions.map((s) => (
+                          <div
+                            key={s.label}
+                            className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border p-4"
+                          >
+                            <div className="min-w-0">
+                              <p className="font-medium">{s.label}</p>
+                              <p className="text-sm text-muted-foreground">{s.detail}</p>
+                              <p className="mt-1 text-sm font-semibold">
+                                {peso(Math.round(s.total))} · {s.items.length} picks
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              className="shrink-0 rounded-full"
+                              onClick={() => applySuggestion(s)}
+                            >
+                              Apply
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="mt-4 text-sm text-muted-foreground">
+                        No listings yet in {destination} — try another destination.
+                      </p>
+                    )}
                   </div>
-                  <Button variant="outline" className="shrink-0 rounded-full" onClick={build}>
-                    <RefreshCw className="size-4" /> Reshuffle
-                  </Button>
-                </div>
-
-                <div className="mt-6 grid gap-6 sm:grid-cols-2">
-                  {plan.map((l, i) => (
-                    <ListingCard key={l.id} listing={l} index={i} />
-                  ))}
-                </div>
-
-                {plan.length === 0 ? (
-                  <p className="mt-6 text-sm text-muted-foreground">
-                    No listings yet in {destination} — try another destination.
-                  </p>
-                ) : null}
+                )}
               </motion.div>
             ) : null}
           </div>
