@@ -12,9 +12,13 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as CancellationPolicyRouteImport } from './routes/cancellation-policy'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as ExploreRouteImport } from './routes/explore'
+import { Route as HelpCentreRouteImport } from './routes/help-centre'
 import { Route as PlannerRouteImport } from './routes/planner'
+import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
+import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
 import { Route as ListingSlugRouteImport } from './routes/listing.$slug'
 import { Route as ApiPublicKeepaliveRouteImport } from './routes/api/public/keepalive'
 
@@ -33,6 +37,11 @@ const AuthRoute = AuthRouteImport.update({
   path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CancellationPolicyRoute = CancellationPolicyRouteImport.update({
+  id: '/cancellation-policy',
+  path: '/cancellation-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -43,9 +52,24 @@ const ExploreRoute = ExploreRouteImport.update({
   path: '/explore',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HelpCentreRoute = HelpCentreRouteImport.update({
+  id: '/help-centre',
+  path: '/help-centre',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PlannerRoute = PlannerRouteImport.update({
   id: '/planner',
   path: '/planner',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
+  id: '/privacy-policy',
+  path: '/privacy-policy',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
+  id: '/terms-of-service',
+  path: '/terms-of-service',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ListingSlugRoute = ListingSlugRouteImport.update({
@@ -63,9 +87,13 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/cancellation-policy': typeof CancellationPolicyRoute
   '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
+  '/help-centre': typeof HelpCentreRoute
   '/planner': typeof PlannerRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
+  '/terms-of-service': typeof TermsOfServiceRoute
   '/listing/$slug': typeof ListingSlugRoute
   '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
@@ -73,9 +101,13 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/cancellation-policy': typeof CancellationPolicyRoute
   '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
+  '/help-centre': typeof HelpCentreRoute
   '/planner': typeof PlannerRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
+  '/terms-of-service': typeof TermsOfServiceRoute
   '/listing/$slug': typeof ListingSlugRoute
   '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
@@ -84,9 +116,13 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/auth': typeof AuthRoute
+  '/cancellation-policy': typeof CancellationPolicyRoute
   '/dashboard': typeof DashboardRoute
   '/explore': typeof ExploreRoute
+  '/help-centre': typeof HelpCentreRoute
   '/planner': typeof PlannerRoute
+  '/privacy-policy': typeof PrivacyPolicyRoute
+  '/terms-of-service': typeof TermsOfServiceRoute
   '/listing/$slug': typeof ListingSlugRoute
   '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
 }
@@ -96,9 +132,13 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/cancellation-policy'
     | '/dashboard'
     | '/explore'
+    | '/help-centre'
     | '/planner'
+    | '/privacy-policy'
+    | '/terms-of-service'
     | '/listing/$slug'
     | '/api/public/keepalive'
   fileRoutesByTo: FileRoutesByTo
@@ -106,9 +146,13 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/cancellation-policy'
     | '/dashboard'
     | '/explore'
+    | '/help-centre'
     | '/planner'
+    | '/privacy-policy'
+    | '/terms-of-service'
     | '/listing/$slug'
     | '/api/public/keepalive'
   id:
@@ -116,9 +160,13 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/auth'
+    | '/cancellation-policy'
     | '/dashboard'
     | '/explore'
+    | '/help-centre'
     | '/planner'
+    | '/privacy-policy'
+    | '/terms-of-service'
     | '/listing/$slug'
     | '/api/public/keepalive'
   fileRoutesById: FileRoutesById
@@ -127,9 +175,13 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   AuthRoute: typeof AuthRoute
+  CancellationPolicyRoute: typeof CancellationPolicyRoute
   DashboardRoute: typeof DashboardRoute
   ExploreRoute: typeof ExploreRoute
+  HelpCentreRoute: typeof HelpCentreRoute
   PlannerRoute: typeof PlannerRoute
+  PrivacyPolicyRoute: typeof PrivacyPolicyRoute
+  TermsOfServiceRoute: typeof TermsOfServiceRoute
   ListingSlugRoute: typeof ListingSlugRoute
   ApiPublicKeepaliveRoute: typeof ApiPublicKeepaliveRoute
 }
@@ -157,6 +209,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cancellation-policy': {
+      id: '/cancellation-policy'
+      path: '/cancellation-policy'
+      fullPath: '/cancellation-policy'
+      preLoaderRoute: typeof CancellationPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
@@ -171,11 +230,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExploreRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/help-centre': {
+      id: '/help-centre'
+      path: '/help-centre'
+      fullPath: '/help-centre'
+      preLoaderRoute: typeof HelpCentreRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/planner': {
       id: '/planner'
       path: '/planner'
       fullPath: '/planner'
       preLoaderRoute: typeof PlannerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy-policy': {
+      id: '/privacy-policy'
+      path: '/privacy-policy'
+      fullPath: '/privacy-policy'
+      preLoaderRoute: typeof PrivacyPolicyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms-of-service': {
+      id: '/terms-of-service'
+      path: '/terms-of-service'
+      fullPath: '/terms-of-service'
+      preLoaderRoute: typeof TermsOfServiceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/listing/$slug': {
@@ -199,9 +279,13 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   AuthRoute: AuthRoute,
+  CancellationPolicyRoute: CancellationPolicyRoute,
   DashboardRoute: DashboardRoute,
   ExploreRoute: ExploreRoute,
+  HelpCentreRoute: HelpCentreRoute,
   PlannerRoute: PlannerRoute,
+  PrivacyPolicyRoute: PrivacyPolicyRoute,
+  TermsOfServiceRoute: TermsOfServiceRoute,
   ListingSlugRoute: ListingSlugRoute,
   ApiPublicKeepaliveRoute: ApiPublicKeepaliveRoute,
 }
