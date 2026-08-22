@@ -2102,8 +2102,11 @@ export async function getBookingsForEmail(email: string): Promise<Booking[]> {
   const key = normalizeEmail(email);
   const merged = new Map<string, Booking>();
 
-  for (const booking of sanitizeDemoBookings(state.bookings)) {
-    if (booking.customerEmail?.toLowerCase() === key) merged.set(booking.id, booking);
+  // mergeAllBookings() re-reads the hub document AND the bookings table, so a
+  // guest checkout made before this account existed is picked up whichever
+  // source currently holds it (and whichever worker isolate served it).
+  for (const booking of await mergeAllBookings()) {
+    if (normalizeEmail(booking.customerEmail ?? "") === key) merged.set(booking.id, booking);
   }
 
   if (supabaseConfigured()) {
@@ -2111,7 +2114,7 @@ export async function getBookingsForEmail(email: string): Promise<Booking[]> {
       const rows = await listBookingRowsByEmail(key);
       for (const row of rows) {
         const booking = rowToBooking(row, state.listings);
-        if (booking.customerEmail?.toLowerCase() !== key) continue;
+        if (normalizeEmail(booking.customerEmail ?? "") !== key) continue;
         merged.set(booking.id, booking); // table row wins on id conflict
       }
     } catch {
@@ -2120,7 +2123,7 @@ export async function getBookingsForEmail(email: string): Promise<Booking[]> {
   }
 
   return sortBookingsNewestFirst(
-    bookingsAfterReset(Array.from(merged.values()), state.bookingsClearedAt),
+    bookingsAfterReset(Array.from(merged.values()), getMemory().bookingsClearedAt),
   );
 }
 
