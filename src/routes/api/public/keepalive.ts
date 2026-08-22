@@ -69,6 +69,7 @@ export const Route = createFileRoute("/api/public/keepalive")({
         // 200 even if stages failed — diagnostics travel in the JSON body so
         // uptime monitors and the GitHub Actions keepalive stay green.
         return Response.json({
+          version: "store-fix-2",
           ...ping,
           newBookings,
           reminders,
