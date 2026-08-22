@@ -872,8 +872,7 @@ function applyRemote(parsed: Partial<HubState> | null) {
     : structuredClone(seedDestinations);
   syncDestinationsFromListings(destinations, listings);
   normalizeListingMaps(listings, destinations);
-  const g = globalThis as GlobalStore;
-  g[GLOBAL_KEY] = {
+  const next: HubState = {
     revision: parsed.revision ?? 1,
     listings,
     bookings: sanitizeDemoBookings(parsed.bookings ?? []),
@@ -890,6 +889,18 @@ function applyRemote(parsed: Partial<HubState> | null) {
     pushReminderDayOfSent: parsed.pushReminderDayOfSent ?? [],
     pushBookingNewSent: parsed.pushBookingNewSent ?? [],
   };
+  const g = globalThis as GlobalStore;
+  const current = g[GLOBAL_KEY];
+  if (current) {
+    // Mutate IN PLACE. Replacing the object would orphan every outstanding
+    // reference (e.g. createBookingRecord's `state`): mutations made after a
+    // refresh land on the stale copy and persistToRemote() — which re-reads
+    // getMemory() — silently drops them. This exact race is what made new
+    // reservations (guest AND registered) vanish without a trace.
+    Object.assign(current, next);
+  } else {
+    g[GLOBAL_KEY] = next;
+  }
   recountDestinationListings(g[GLOBAL_KEY]!.destinations, g[GLOBAL_KEY]!.listings);
   hydrateAllListingPackages(g[GLOBAL_KEY]!);
 }
@@ -1604,6 +1615,10 @@ export async function createBookingRecord(input: {
   }
 
   const existing = await mergeAllBookings();
+  // Re-anchor to live memory AFTER merging: refreshStoreBookings()/applyRemote()
+  // refreshes global state mid-flight, and mutating a stale reference would
+  // silently drop this reservation when persistToRemote() re-reads getMemory().
+  const liveState = getMemory();
   const quote = quoteBooking(listing, {
     guests: input.guests,
     startDate: input.date,
@@ -1616,7 +1631,10 @@ export async function createBookingRecord(input: {
   const takenRefs = new Set(existing.map((b) => b.reference.toLowerCase()));
   let ref = "";
   do {
+    // trim(): a destination like "El Nido " must not yield "EXH-1234-EL "
+    // (trailing space) — it breaks exact reference lookups in Supabase.
     ref = `EXH-${Math.floor(1000 + Math.random() * 8999)}-${listing.destination
+      .trim()
       .slice(0, 3)
       .toUpperCase()}`;
   } while (takenRefs.has(ref.toLowerCase()));
@@ -1652,13 +1670,13 @@ export async function createBookingRecord(input: {
     createdAt: new Date().toISOString(),
     statusUpdatedAt: new Date().toISOString(),
   };
-  state.bookings.unshift(booking);
+  liveState.bookings.unshift(booking);
   const submittedBody = bookingPushBody(
     booking,
     `${listing.title} (${ref})${quote.packageName ? ` · ${quote.packageName}` : ""} is pending approval.`,
   );
   if (input.customerEmail) {
-    pushNotification(state, {
+    pushNotification(liveState, {
       email: input.customerEmail,
       title: "Booking submitted",
       body: submittedBody,
@@ -1666,14 +1684,14 @@ export async function createBookingRecord(input: {
       kind: "booking",
     });
   }
-  await bumpAndWait(state);
+  await bumpAndWait(liveState);
   await mirrorBooking(booking);
 
   const { absoluteUrl, sendPushToAdmins, sendPushToEmails, deliverPushSafely } = await import(
     "@/lib/onesignal.server"
   );
   const adminResult = await deliverPushSafely("booking-new-admin", () =>
-    sendPushToAdmins(adminEmails(state), {
+    sendPushToAdmins(adminEmails(liveState), {
       title: "New booking",
       body: [
         `${booking.customer} · ${listing.title}`,
@@ -1697,8 +1715,8 @@ export async function createBookingRecord(input: {
     }),
   );
   if (adminResult && adminResult.recipients > 0) {
-    markPushBookingNewSent(state, booking.id);
-    await bumpAndWait(state);
+    markPushBookingNewSent(liveState, booking.id);
+    await bumpAndWait(liveState);
   } else {
     console.warn("[booking] admin push delivered to 0 devices — keepalive will retry", adminResult);
   }
