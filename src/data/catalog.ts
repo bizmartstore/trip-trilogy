@@ -11,6 +11,7 @@ export const destinations: Destination[] = [
     image: img("1518509562904-e7ef99cdcc86"),
     listings: 128,
     tagline: "Limestone cliffs & hidden lagoons",
+    coords: { lat: 11.1949, lng: 119.4013 },
   },
   {
     id: "d2",
@@ -19,6 +20,7 @@ export const destinations: Destination[] = [
     image: img("1552465011-b4e21bf6e79a"),
     listings: 96,
     tagline: "Shipwrecks & twin lagoons",
+    coords: { lat: 11.9986, lng: 120.2043 },
   },
   {
     id: "d3",
@@ -27,6 +29,7 @@ export const destinations: Destination[] = [
     image: img("1544551763-46a013bb70d5"),
     listings: 112,
     tagline: "Underground river & city comforts",
+    coords: { lat: 10.1927, lng: 118.9256 },
   },
   {
     id: "d4",
@@ -35,6 +38,7 @@ export const destinations: Destination[] = [
     image: img("1502920917128-1aa500764cbd"),
     listings: 54,
     tagline: "Slow beach town, turtle bays",
+    coords: { lat: 10.4432, lng: 119.2 },
   },
   {
     id: "d5",
@@ -43,6 +47,7 @@ export const destinations: Destination[] = [
     image: img("1507525428034-b723cf961d3e"),
     listings: 41,
     tagline: "Long Beach — 14km of white sand",
+    coords: { lat: 10.5231, lng: 119.2402 },
   },
   {
     id: "d6",
@@ -51,6 +56,7 @@ export const destinations: Destination[] = [
     image: img("1476514525535-07fb3b4ae5f1"),
     listings: 27,
     tagline: "Pink sand & untouched islets",
+    coords: { lat: 7.9896, lng: 117.0642 },
   },
 ];
 
@@ -82,7 +88,6 @@ export const listings: Listing[] = [
     tags: ["beach", "adventure", "family friendly", "popular"],
     durationDays: 1,
     seatsLeft: 6,
-    discountPct: 15,
     featured: true,
     status: "approved",
     businessName: "Bacuit Voyages",
@@ -189,7 +194,6 @@ export const listings: Listing[] = [
     tags: ["beach", "adventure", "romantic"],
     durationDays: 4,
     seatsLeft: 8,
-    discountPct: 10,
     status: "approved",
     businessName: "Frontier Islands Co.",
     createdAt: "2026-04-19",
@@ -444,7 +448,6 @@ export const listings: Listing[] = [
     tags: ["beach", "popular", "family friendly", "luxury"],
     durationDays: 1,
     seatsLeft: 18,
-    discountPct: 20,
     status: "approved",
     businessName: "Long Beach Sail Co.",
     createdAt: "2026-07-25",

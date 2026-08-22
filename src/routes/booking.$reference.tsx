@@ -1,18 +1,16 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, CheckCircle2, Loader2, MapPin, Phone, Users } from "lucide-react";
+import { CheckCircle2, Loader2, MapPin, Phone } from "lucide-react";
 
+import { BookingDetailsList } from "@/components/booking/booking-details";
 import { BookingQrCode } from "@/components/booking/booking-qr-code";
-import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { readCachedBookingConfirmation } from "@/lib/booking-cache";
-import { bookingStatusLabel } from "@/lib/booking-receipt";
 import { fetchBookingByReference } from "@/lib/api";
 import { getBookingByReference } from "@/lib/store.server";
 import { NEXORA_LOGO_SRC } from "@/lib/brand";
 import type { Booking } from "@/lib/types";
-import { peso } from "@/lib/utils";
 import { syncEnvFromGlobal } from "@/lib/worker-env";
 
 export const Route = createFileRoute("/booking/$reference")({
@@ -112,21 +110,15 @@ function BookingConfirmationPage() {
 
           <Separator className="my-5" />
 
-          <dl className="space-y-3 text-sm">
-            <Detail label="Listing" value={booking.listingTitle} />
-            <Detail label="Guest" value={booking.customer} />
-            <Detail label="Date" value={booking.date} icon={CalendarDays} />
-            <Detail label="Guests" value={String(booking.guests)} icon={Users} />
-            <Detail label="Total" value={peso(booking.total)} />
-            <Detail label="Payment" value={booking.paid ? "Paid" : "Pay on arrival"} />
-            <div className="flex items-center justify-between gap-4 pt-1">
-              <dt className="text-muted-foreground">Status</dt>
-              <dd>
-                <StatusBadge status={booking.status} />
-              </dd>
-            </div>
-            <p className="text-xs text-muted-foreground">{bookingStatusLabel(booking.status)}</p>
-          </dl>
+          <BookingDetailsList booking={booking} />
+          <div className="mt-3 flex justify-between gap-4 text-sm">
+            <span className="text-muted-foreground">Payment</span>
+            <span className="font-medium">{booking.paid ? "Paid" : "Pay on arrival"}</span>
+          </div>
+          <div className="mt-2 flex justify-between gap-4 text-sm">
+            <span className="text-muted-foreground">Guest</span>
+            <span className="font-medium">{booking.customer}</span>
+          </div>
         </div>
 
         <div className="mt-6 rounded-3xl border border-dashed border-border bg-secondary/40 p-5 text-sm text-muted-foreground">
@@ -157,26 +149,6 @@ function BookingConfirmationPage() {
           </Button>
         </div>
       </div>
-    </div>
-  );
-}
-
-function Detail({
-  label,
-  value,
-  icon: Icon,
-}: {
-  label: string;
-  value: string;
-  icon?: typeof CalendarDays;
-}) {
-  return (
-    <div className="flex justify-between gap-4">
-      <dt className="flex shrink-0 items-center gap-1.5 text-muted-foreground">
-        {Icon ? <Icon className="size-3.5" /> : null}
-        {label}
-      </dt>
-      <dd className="truncate text-right font-medium">{value}</dd>
     </div>
   );
 }

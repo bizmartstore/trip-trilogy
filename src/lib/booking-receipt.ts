@@ -1,14 +1,25 @@
 import QRCode from "qrcode";
 
+import {
+  bookingDurationLabel,
+  bookingEndYmd,
+  bookingStartYmd,
+  formatDateTime,
+  PACKAGE_BILLING_LABELS,
+  PRICING_TYPE_LABELS,
+  resolvePackageBilling,
+} from "@/lib/booking-model";
 import { bookingConfirmationUrl } from "@/lib/booking-url";
 import type { Booking, HubSettings } from "@/lib/types";
 import { peso } from "@/lib/utils";
 
-const STATUS_LABELS: Record<Booking["status"], string> = {
+const STATUS_LABELS: Partial<Record<Booking["status"], string>> = {
   pending: "Pending admin approval",
-  approved: "Approved — awaiting confirmation",
+  approved: "Approved — payment required to finalize",
   confirmed: "Confirmed",
   completed: "Completed",
+  partial_payment: "Partially paid — balance to be settled",
+  completed_payment: "Fully paid",
   cancelled: "Cancelled",
   rejected: "Declined",
 };
@@ -95,7 +106,7 @@ export async function downloadBookingReceipt(
   options: { qrDataUrl: string; settings?: HubSettings },
 ) {
   const width = 400;
-  const height = 680;
+  const height = 780;
   const canvas = document.createElement("canvas");
   canvas.width = width * 2;
   canvas.height = height * 2;
@@ -125,15 +136,34 @@ export async function downloadBookingReceipt(
   ctx.lineTo(width - 20, 96);
   ctx.stroke();
 
-  const rows: [string, string][] = [
-    ["Listing", booking.listingTitle],
-    ["Date", booking.date],
+  const start = formatDateTime(bookingStartYmd(booking), booking.startTime) || booking.date;
+  const end = formatDateTime(bookingEndYmd(booking), booking.endTime) || start;
+  const rows: [string, string][] = [["Listing", booking.listingTitle]];
+  if (booking.packageNameSnapshot) {
+    const billing = resolvePackageBilling(booking.packageSnapshot);
+    const unitBit =
+      booking.packagePriceSnapshot != null
+        ? ` · ${peso(booking.packagePriceSnapshot)} ${PACKAGE_BILLING_LABELS[billing].toLowerCase()}`
+        : "";
+    rows.push(["Package tier", `${booking.packageNameSnapshot}${unitBit}`]);
+  }
+  rows.push(
+    ["Start", start],
+    ["End", end],
+    ["Duration", bookingDurationLabel(booking)],
     ["Guests", String(booking.guests)],
+  );
+  if (booking.pricingType === "per_package" && booking.packageSnapshot) {
+    rows.push(["Billing", PACKAGE_BILLING_LABELS[resolvePackageBilling(booking.packageSnapshot)]]);
+  } else if (booking.pricingType) {
+    rows.push(["Pricing", PRICING_TYPE_LABELS[booking.pricingType]]);
+  }
+  rows.push(
     ["Guest", booking.customer],
     ["Total", peso(booking.total)],
     ["Payment", booking.paid ? "Paid" : "Pay on arrival"],
     ["Status", bookingStatusLabel(booking.status)],
-  ];
+  );
 
   const labelX = 20;
   const valueX = 118;
@@ -172,13 +202,7 @@ export async function downloadBookingReceipt(
 
   const confirmUrl = bookingConfirmationUrl(booking.reference);
   ctx.font = "9px ui-monospace, monospace";
-  footerY = drawCenteredLines(
-    ctx,
-    splitUrlLines(confirmUrl),
-    width / 2,
-    footerY + 2,
-    12,
-  );
+  footerY = drawCenteredLines(ctx, splitUrlLines(confirmUrl), width / 2, footerY + 2, 12);
 
   if (options.settings?.contactPhone) {
     ctx.font = "11px 'Segoe UI', system-ui, sans-serif";

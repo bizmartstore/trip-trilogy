@@ -31,7 +31,12 @@ const signInSchema = z.object({
 });
 
 const signUpSchema = signInSchema.extend({
-  name: z.string().trim().min(2, "Enter your name").max(80),
+  name: z
+    .string()
+    .trim()
+    .min(2, "Enter your name")
+    .max(80)
+    .transform((value) => value.replace(/\s+/g, " ").toLocaleUpperCase("en-US")),
 });
 
 export const Route = createFileRoute("/auth")({
@@ -67,12 +72,18 @@ function Auth() {
     defaultValues: { name: "", email: "", password: "" },
   });
 
-  const afterAuth = (account: { name: string; email: string; role: "tourist" | "admin"; picture?: string }) => {
+  const afterAuth = (
+    account: { name: string; email: string; role: "tourist" | "admin"; picture?: string },
+    isNewAccount: boolean,
+  ) => {
     applyAuthUser({
       name: account.name,
       email: account.email,
       role: account.role,
       picture: account.picture,
+    });
+    void import("@/lib/push-auth").then(({ syncPushAfterAuth }) => {
+      syncPushAfterAuth(account, { isNewAccount });
     });
     if (account.role === "admin") {
       toast.success(
@@ -97,7 +108,7 @@ function Auth() {
           toast.error(result.error);
           return;
         }
-        afterAuth(result.account);
+        afterAuth(result.account, true);
       } else {
         const values = signIn.getValues();
         const result = await signInAccount(values);
@@ -105,7 +116,7 @@ function Auth() {
           toast.error(result.error);
           return;
         }
-        afterAuth(result.account);
+        afterAuth(result.account, false);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong. Try again.");
@@ -143,6 +154,13 @@ function Auth() {
 
           <div className="mt-8">
             <GoogleSignInButton />
+            <p className="mt-3 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-xs text-muted-foreground">
+              Made a reservation as a guest? Sign in or create your account with{" "}
+              <span className="font-semibold text-foreground">
+                the same email address you used during reservation
+              </span>{" "}
+              — your approved reservations and payments will appear in your dashboard.
+            </p>
             <div className="my-6 flex items-center gap-3">
               <span className="h-px flex-1 bg-border" />
               <span className="text-xs uppercase tracking-widest text-muted-foreground">or</span>
@@ -245,9 +263,13 @@ function Auth() {
                         <FormControl>
                           <Input
                             autoComplete="name"
-                            placeholder="Amara Devi"
-                            className="h-12 rounded-xl text-base"
+                            autoCapitalize="characters"
+                            placeholder="AMARA DEVI"
+                            className="h-12 rounded-xl text-base uppercase"
                             {...field}
+                            onChange={(e) =>
+                              field.onChange(e.target.value.toLocaleUpperCase("en-US"))
+                            }
                           />
                         </FormControl>
                         <FormMessage />

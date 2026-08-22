@@ -30,12 +30,12 @@ export function supabaseConfigured() {
 }
 
 export function supabaseMissingConfigMessage() {
-  return "Account database is not connected. Set NEXORA_SUPABASE_SERVICE_ROLE_KEY on your Cloudflare Worker: run `wrangler secret put NEXORA_SUPABASE_SERVICE_ROLE_KEY` (or add it as a GitHub Actions secret so deploy syncs it), then redeploy. Use the service_role key from Supabase → Project Settings → API.";
+  return "Account services are temporarily unavailable. Please try again in a few minutes.";
 }
 
 async function rest(path: string, init: RequestInit = {}) {
   const cfg = config();
-  if (!cfg) throw new Error("Supabase is not configured");
+  if (!cfg) throw new Error("Account services are not configured");
   const headers = new Headers(init.headers);
   headers.set("apikey", cfg.key);
   headers.set("Authorization", `Bearer ${cfg.key}`);
@@ -86,21 +86,58 @@ export async function upsertBookingRow(row: Record<string, unknown>) {
   });
 }
 
+/** Cached: some projects never ran the password_hash migration. */
+let accountsPasswordHashSupported: boolean | null = null;
+
+function isMissingPasswordHashColumn(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("PGRST204") && message.includes("password_hash");
+}
+
+function accountRowPayload(row: Record<string, unknown>, includePasswordHash: boolean) {
+  const payload: Record<string, unknown> = { ...row };
+  if (!includePasswordHash || !payload.password_hash) {
+    delete payload.password_hash;
+  }
+  return payload;
+}
+
 /** Persist an account row so every sign-up lives permanently in Supabase. */
 export async function upsertAccountRow(row: Record<string, unknown>) {
   const email = encodeURIComponent(String(row.email ?? ""));
+  const wantPassword =
+    accountsPasswordHashSupported !== false &&
+    typeof row.password_hash === "string" &&
+    row.password_hash.length > 0;
+
+  const write = async (includePasswordHash: boolean) => {
+    const payload = accountRowPayload(row, includePasswordHash);
+    try {
+      await rest("accounts?on_conflict=email", {
+        method: "POST",
+        headers: { Prefer: "resolution=merge-duplicates" },
+        body: JSON.stringify([payload]),
+      });
+    } catch (error) {
+      if (includePasswordHash && isMissingPasswordHashColumn(error)) throw error;
+      // Some projects already have the row (e.g. admin seed) — patch it in place.
+      await rest(`accounts?email=eq.${email}`, {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      });
+    }
+  };
+
   try {
-    await rest("accounts?on_conflict=email", {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates" },
-      body: JSON.stringify([row]),
-    });
-  } catch {
-    // Some projects already have the row (e.g. admin seed) — patch it in place.
-    await rest(`accounts?email=eq.${email}`, {
-      method: "PATCH",
-      body: JSON.stringify(row),
-    });
+    await write(wantPassword);
+    if (wantPassword) accountsPasswordHashSupported = true;
+  } catch (error) {
+    if (wantPassword && isMissingPasswordHashColumn(error)) {
+      accountsPasswordHashSupported = false;
+      await write(false);
+      return;
+    }
+    throw error;
   }
 }
 
@@ -111,6 +148,20 @@ export async function readAccountRow(email: string): Promise<Record<string, unkn
     `accounts?email=eq.${encoded}&select=*&limit=1`,
   )) as Record<string, unknown>[] | null;
   return rows?.[0] ?? null;
+}
+
+/** All registered accounts for the admin customers directory. */
+export async function listAccountRows(limit = 1000): Promise<Record<string, unknown>[]> {
+  const rows = (await rest(
+    `accounts?select=email,name,role,created_at,picture&order=created_at.desc&limit=${limit}`,
+  )) as Record<string, unknown>[] | null;
+  return rows ?? [];
+}
+
+/** Permanently delete a registered account (main-admin customer removal). */
+export async function deleteAccountRow(email: string) {
+  const encoded = encodeURIComponent(email.trim().toLowerCase());
+  await rest(`accounts?email=eq.${encoded}`, { method: "DELETE" });
 }
 
 /** Read the newest booking rows straight from Supabase for the live admin feed. */
@@ -139,6 +190,19 @@ export async function listBookingRowsByEmail(
     `bookings?customer_email=eq.${encoded}&select=*&order=created_at.desc&limit=${limit}`,
   )) as Record<string, unknown>[] | null;
   return rows ?? [];
+}
+
+/** Wipe every row from the bookings table (main-admin revenue reset). */
+export async function deleteAllBookingRows() {
+  await rest("bookings?created_at=lt.2099-12-31", { method: "DELETE" });
+  const leftover = await listAllBookingRows(500);
+  if (!leftover.length) return;
+  const ids = leftover
+    .map((row) => String(row.id ?? ""))
+    .filter((id) => id && id !== "undefined");
+  if (!ids.length) return;
+  const encoded = ids.join(",");
+  await rest(`bookings?id=in.(${encoded})`, { method: "DELETE" });
 }
 
 /** Remove seeded demo reservations from the real bookings table. */
@@ -190,3 +254,69 @@ export async function pingSupabase() {
   const revision = await readHubRevision();
   return { ok: true as const, revision, ms: Date.now() - started };
 }
+
+/** Favourites mirrored as real rows (email + listing_id). Service role only. */
+export async function upsertFavoriteRow(email: string, listingId: string) {
+  await rest("favorites?on_conflict=email,listing_id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify([
+      {
+        email: email.trim().toLowerCase(),
+        listing_id: listingId,
+        created_at: new Date().toISOString(),
+      },
+    ]),
+  });
+}
+
+/** Mirror public listings (availability + core fields) for admin SQL visibility. */
+export async function upsertListingRow(row: Record<string, unknown>) {
+  await rest("listing_catalog?on_conflict=id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify([row]),
+  });
+}
+
+export async function deleteListingRow(id: string) {
+  const encoded = encodeURIComponent(id);
+  await rest(`listing_catalog?id=eq.${encoded}`, { method: "DELETE" });
+}
+
+/** Mirror global travel package tiers for SQL visibility. */
+export async function upsertTravelPackageRow(row: Record<string, unknown>) {
+  await rest("travel_packages?on_conflict=id", {
+    method: "POST",
+    headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+    body: JSON.stringify([row]),
+  });
+}
+
+export async function deleteTravelPackageRow(id: string) {
+  const encoded = encodeURIComponent(id);
+  await rest(`travel_packages?id=eq.${encoded}`, { method: "DELETE" });
+}
+
+export async function deleteFavoriteRow(email: string, listingId: string) {
+  const encodedEmail = encodeURIComponent(email.trim().toLowerCase());
+  const encodedListing = encodeURIComponent(listingId);
+  await rest(`favorites?email=eq.${encodedEmail}&listing_id=eq.${encodedListing}`, {
+    method: "DELETE",
+  });
+}
+
+export async function deleteFavoriteRowsForEmail(email: string) {
+  const encoded = encodeURIComponent(email.trim().toLowerCase());
+  await rest(`favorites?email=eq.${encoded}`, { method: "DELETE" });
+}
+
+export async function listFavoriteListingIds(email: string): Promise<string[]> {
+  const encoded = encodeURIComponent(email.trim().toLowerCase());
+  const rows = (await rest(
+    `favorites?email=eq.${encoded}&select=listing_id&order=created_at.desc&limit=500`,
+  )) as { listing_id?: string }[] | null;
+  if (!rows?.length) return [];
+  return rows.map((r) => String(r.listing_id ?? "")).filter(Boolean);
+}
+

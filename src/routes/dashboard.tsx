@@ -12,10 +12,20 @@ import {
   YAxis,
 } from "recharts";
 import { Bell, CalendarCheck, Heart, Loader2, Plane, Wallet } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { PAYMAYA_PAYMENT_LINK } from "@/lib/constants";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { NotificationPreferences } from "@/components/dashboard/notification-preferences";
+import { ProfileNameEditor } from "@/components/dashboard/profile-name-editor";
+import { ListingCard, ListingCardSkeleton } from "@/components/listings/listing-card";
 import { StatCard } from "@/components/shared/stat-card";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
@@ -35,10 +45,15 @@ import {
   fetchNotifications,
   markAllNotificationsRead,
   markNotificationRead,
+  recordBookingPayment,
   updateBookingStatus,
 } from "@/lib/api";
+import {
+  bookingDateRangeLabel,
+  bookingDurationLabel,
+} from "@/lib/booking-model";
 import { formatRelativeTime } from "@/lib/format-relative";
-import type { Booking } from "@/lib/types";
+import type { Booking, Listing } from "@/lib/types";
 import { cn, peso } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -85,17 +100,19 @@ function buildSpendChart(bookings: Booking[]) {
 }
 
 function buildTypeChart(bookings: Booking[]) {
-  const counts = { Tours: 0, Stays: 0, Dining: 0 };
+  const counts = { Tours: 0, Stays: 0, Dining: 0, Packages: 0 };
   for (const b of bookings) {
     if (b.status === "cancelled") continue;
     if (b.kind === "tour") counts.Tours += 1;
     else if (b.kind === "stay") counts.Stays += 1;
     else if (b.kind === "restaurant") counts.Dining += 1;
+    else if (b.kind === "package") counts.Packages += 1;
   }
   return [
     { type: "Tours", count: counts.Tours },
     { type: "Stays", count: counts.Stays },
     { type: "Dining", count: counts.Dining },
+    { type: "Packages", count: counts.Packages },
   ];
 }
 
@@ -103,6 +120,7 @@ function Dashboard() {
   const qc = useQueryClient();
   const { user, ready } = useAuth();
   const navigate = useNavigate();
+  const [tripTab, setTripTab] = useState("all");
 
   useEffect(() => {
     if (!ready) return;
@@ -161,8 +179,24 @@ function Dashboard() {
       }),
   });
 
+  const [payTarget, setPayTarget] = useState<Booking | null>(null);
+  const pay = useMutation({
+    mutationFn: (booking: Booking) => recordBookingPayment(booking.id, "paymaya"),
+    onSuccess: (_result, booking) => {
+      void qc.invalidateQueries({ queryKey: ["bookings", user?.email] });
+      toast.success("Opening PayMaya…", {
+        description: `Complete the payment for ${booking.reference} (${peso(booking.total)}). The admin will confirm once received.`,
+      });
+      window.open(PAYMAYA_PAYMENT_LINK, "_blank", "noopener,noreferrer");
+      setPayTarget(null);
+    },
+    onError: () => toast.error("Could not start the payment. Please try again."),
+  });
+
   const upcoming =
-    data?.filter((b) => ["pending", "approved", "confirmed"].includes(b.status)) ?? [];
+    data?.filter((b) =>
+      ["pending", "approved", "confirmed", "partial_payment", "completed_payment"].includes(b.status),
+    ) ?? [];
   const totalSpend = data?.reduce((s, b) => s + (b.status === "cancelled" ? 0 : b.total), 0) ?? 0;
   const spendData = useMemo(() => buildSpendChart(data ?? []), [data]);
   const typeData = useMemo(() => buildTypeChart(data ?? []), [data]);
@@ -187,6 +221,7 @@ function Dashboard() {
             <p className="mt-2 text-sm text-muted-foreground sm:text-base">
               Everything you've booked across Nexora, in one timeline.
             </p>
+            <ProfileNameEditor user={user} />
           </div>
           <Button asChild variant="hero" className="w-full shrink-0 rounded-full sm:w-auto">
             <Link to="/explore" search={{ kind: "all" }}>
@@ -199,12 +234,19 @@ function Dashboard() {
           <StatCard icon={Plane} label="Upcoming trips" value={String(upcoming.length)} index={0} />
           <StatCard icon={CalendarCheck} label="Total bookings" value={String(data?.length ?? 0)} index={1} />
           <StatCard icon={Wallet} label="Lifetime spend" value={peso(totalSpend)} index={2} />
-          <StatCard
-            icon={Heart}
-            label="Saved listings"
-            value={String(favorites.data?.length ?? 0)}
-            index={3}
-          />
+          <button
+            type="button"
+            className="w-full text-left"
+            onClick={() => setTripTab("favourites")}
+            aria-label="View saved favourites"
+          >
+            <StatCard
+              icon={Heart}
+              label="Saved listings"
+              value={String(favorites.data?.length ?? 0)}
+              index={3}
+            />
+          </button>
         </div>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
@@ -308,15 +350,18 @@ function Dashboard() {
         </div>
 
         <div className="mt-8 rounded-3xl border border-border bg-card p-4 shadow-soft sm:p-6">
-          <Tabs defaultValue="all">
+          <Tabs value={tripTab} onValueChange={setTripTab}>
             <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-              <h2 className="min-w-0 truncate font-display text-lg font-semibold">My bookings</h2>
+              <h2 className="min-w-0 truncate font-display text-lg font-semibold">My trips</h2>
               <TabsList className="w-full shrink-0 rounded-full sm:w-auto">
                 <TabsTrigger value="all" className="flex-1 rounded-full sm:flex-none">
                   All
                 </TabsTrigger>
                 <TabsTrigger value="upcoming" className="flex-1 rounded-full sm:flex-none">
                   Upcoming
+                </TabsTrigger>
+                <TabsTrigger value="favourites" className="flex-1 rounded-full sm:flex-none">
+                  Favourites
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -326,6 +371,7 @@ function Dashboard() {
                 bookings={data}
                 isLoading={isLoading}
                 onCancel={(id) => cancel.mutate(id)}
+                onPay={setPayTarget}
                 pendingId={cancel.isPending ? cancel.variables : undefined}
               />
             </TabsContent>
@@ -334,8 +380,12 @@ function Dashboard() {
                 bookings={upcoming}
                 isLoading={isLoading}
                 onCancel={(id) => cancel.mutate(id)}
+                onPay={setPayTarget}
                 pendingId={cancel.isPending ? cancel.variables : undefined}
               />
+            </TabsContent>
+            <TabsContent value="favourites" className="mt-6">
+              <FavouritesGrid listings={favorites.data} isLoading={favorites.isLoading} />
             </TabsContent>
           </Tabs>
         </div>
@@ -361,12 +411,97 @@ function Dashboard() {
                     color: "var(--color-card-foreground)",
                   }}
                 />
-                <Bar dataKey="count" fill="var(--color-primary)" radius={[10, 10, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+              <Bar dataKey="count" fill="var(--color-primary)" radius={[10, 10, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
+      </div>
+
+      <Dialog open={!!payTarget} onOpenChange={(v) => !v && setPayTarget(null)}>
+        <DialogContent className="rounded-3xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Pay for this reservation</DialogTitle>
+            <DialogDescription>
+              {payTarget
+                ? `${payTarget.reference} · ${payTarget.listingTitle} · ${peso(payTarget.total)}`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Choose a payment gateway to settle this approved reservation. You will be redirected to
+            complete the payment — the admin confirms it once the amount is received.
+          </p>
+          <button
+            type="button"
+            disabled={pay.isPending}
+            onClick={() => payTarget && pay.mutate(payTarget)}
+            className="flex w-full items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-primary/5 disabled:opacity-60"
+          >
+            <span className="flex items-center gap-3">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-[#00d3aa]/15 font-display text-sm font-bold text-[#008c73] dark:text-[#00d3aa]">
+                PM
+              </span>
+              <span>
+                <span className="block font-medium">Maya (PayMaya)</span>
+                <span className="block text-xs text-muted-foreground">
+                  Pay via the Maya gateway link
+                </span>
+              </span>
+            </span>
+            {pay.isPending ? (
+              <Loader2 className="size-4 shrink-0 animate-spin" />
+            ) : (
+              <span className="shrink-0 rounded-full bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">
+                Pay now
+              </span>
+            )}
+          </button>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function FavouritesGrid({
+  listings,
+  isLoading,
+}: {
+  listings?: Listing[];
+  isLoading: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <ListingCardSkeleton key={i} />
+        ))}
+      </div>
+    );
+  }
+
+  if (!listings?.length) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border py-16 text-center">
+        <Heart className="mx-auto size-8 text-muted-foreground/60" />
+        <p className="mt-4 font-display text-lg font-semibold">No favourites yet</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Tap the heart on any tour, stay, or dining listing to save it here.
+        </p>
+        <Button asChild variant="outline" className="mt-4 rounded-full">
+          <Link to="/explore" search={{ kind: "all" }}>
+            Browse listings
+          </Link>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+      {listings.map((listing, index) => (
+        <ListingCard key={listing.id} listing={listing} index={index} />
+      ))}
     </div>
   );
 }
@@ -375,11 +510,13 @@ function BookingList({
   bookings,
   isLoading,
   onCancel,
+  onPay,
   pendingId,
 }: {
   bookings?: Booking[];
   isLoading: boolean;
   onCancel: (id: string) => void;
+  onPay: (booking: Booking) => void;
   pendingId?: string;
 }) {
   if (isLoading) {
@@ -416,7 +553,8 @@ function BookingList({
                 <p className="truncate font-medium">{b.listingTitle}</p>
                 <p className="font-mono text-xs text-muted-foreground">{b.reference}</p>
                 <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                  <span>{b.date}</span>
+                  <span>{bookingDateRangeLabel(b)}</span>
+                  {b.packageNameSnapshot ? <span>{b.packageNameSnapshot}</span> : null}
                   <span>{b.guests} guest{b.guests === 1 ? "" : "s"}</span>
                   <span className="font-semibold text-foreground">{peso(b.total)}</span>
                 </div>
@@ -424,17 +562,29 @@ function BookingList({
             </div>
             <div className="mt-3 flex items-center justify-between gap-3">
               <StatusBadge status={b.status} />
-              {["pending", "approved", "confirmed"].includes(b.status) ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="rounded-full"
-                  disabled={pendingId === b.id}
-                  onClick={() => onCancel(b.id)}
-                >
-                  {pendingId === b.id ? <Loader2 className="size-3.5 animate-spin" /> : "Cancel"}
-                </Button>
-              ) : null}
+              <div className="flex shrink-0 items-center gap-2">
+                {["approved", "confirmed"].includes(b.status) ? (
+                  <Button
+                    size="sm"
+                    variant="hero"
+                    className="rounded-full"
+                    onClick={() => onPay(b)}
+                  >
+                    Pay now
+                  </Button>
+                ) : null}
+                {["pending", "approved", "confirmed"].includes(b.status) ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full"
+                    disabled={pendingId === b.id}
+                    onClick={() => onCancel(b.id)}
+                  >
+                    {pendingId === b.id ? <Loader2 className="size-3.5 animate-spin" /> : "Cancel"}
+                  </Button>
+                ) : null}
+              </div>
             </div>
             {b.adminNote ? (
               <p className="mt-2 text-xs italic text-muted-foreground">“{b.adminNote}”</p>
@@ -449,7 +599,8 @@ function BookingList({
             <TableRow>
               <TableHead>Listing</TableHead>
               <TableHead>Reference</TableHead>
-              <TableHead>Date</TableHead>
+              <TableHead>Schedule</TableHead>
+              <TableHead>Package</TableHead>
               <TableHead>Guests</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Status</TableHead>
@@ -471,7 +622,11 @@ function BookingList({
                   </div>
                 </TableCell>
                 <TableCell className="font-mono text-xs">{b.reference}</TableCell>
-                <TableCell className="whitespace-nowrap">{b.date}</TableCell>
+                <TableCell className="min-w-[160px] text-sm">
+                  <p>{bookingDateRangeLabel(b)}</p>
+                  <p className="text-[11px] text-muted-foreground">{bookingDurationLabel(b)}</p>
+                </TableCell>
+                <TableCell className="text-sm">{b.packageNameSnapshot || "—"}</TableCell>
                 <TableCell>{b.guests}</TableCell>
                 <TableCell>{peso(b.total)}</TableCell>
                 <TableCell>
@@ -488,17 +643,27 @@ function BookingList({
                   ) : null}
                 </TableCell>
                 <TableCell className="text-right">
+                  {["approved", "confirmed"].includes(b.status) ? (
+                    <Button
+                      size="sm"
+                      variant="hero"
+                      className="rounded-full"
+                      onClick={() => onPay(b)}
+                    >
+                      Pay now
+                    </Button>
+                  ) : null}
                   {["pending", "approved", "confirmed"].includes(b.status) ? (
                     <Button
                       size="sm"
                       variant="outline"
-                      className="rounded-full"
+                      className="ml-2 rounded-full"
                       disabled={pendingId === b.id}
                       onClick={() => onCancel(b.id)}
                     >
                       {pendingId === b.id ? <Loader2 className="size-3.5 animate-spin" /> : "Cancel"}
                     </Button>
-                  ) : (
+                  ) : ["approved", "confirmed"].includes(b.status) ? null : (
                     <span className="text-xs text-muted-foreground">—</span>
                   )}
                 </TableCell>

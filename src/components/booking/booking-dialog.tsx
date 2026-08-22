@@ -13,13 +13,15 @@ import {
   Phone,
   Sparkles,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 
+import { BookingDetailsList } from "@/components/booking/booking-details";
 import { BookingQrCode } from "@/components/booking/booking-qr-code";
+import { PackagePicker } from "@/components/booking/package-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -47,7 +49,17 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { createBooking, fetchSettings } from "@/lib/api";
 import {
-  bookingStatusLabel,
+  activePackages,
+  bookingStartYmd,
+  formatDateTime,
+  formatDurationLabel,
+  listingUsesSchedule,
+  PACKAGE_BILLING_LABELS,
+  quoteBooking,
+  resolvePackageBilling,
+  resolvePricingType,
+} from "@/lib/booking-model";
+import {
   downloadBookingReceipt,
   generateBookingQrDataUrl,
 } from "@/lib/booking-receipt";
@@ -61,7 +73,6 @@ const schema = z.object({
   name: z.string().trim().min(2, "Please enter your full name").max(80),
   email: z.string().trim().email("Enter a valid email address").max(160),
   phone: z.string().trim().min(6, "Enter a contact number").max(32),
-  date: z.string().min(1, "Choose a date"),
   notes: z.string().max(400).optional(),
   notifyPreference: z.enum(["call", "sms", "email", "any"]),
 });
@@ -73,18 +84,50 @@ export function BookingDialog({
   onOpenChange,
   listing,
   guests,
+  startDate,
   total,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   listing: Listing;
   guests: number;
+  startDate: string;
   total: number;
 }) {
   const [confirmed, setConfirmed] = useState<Booking | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [packageId, setPackageId] = useState<string | undefined>();
   const { user, ready } = useAuth();
   const settings = useQuery({ queryKey: ["hub-settings"], queryFn: fetchSettings });
+
+  const pricingType = resolvePricingType(listing);
+  const needsPackage = pricingType === "per_package";
+  const packages = useMemo(() => activePackages(listing), [listing]);
+  const selectedPackage = packages.find((pkg) => pkg.id === packageId);
+  const packageBilling = resolvePackageBilling(selectedPackage);
+  const packageGuestCap = selectedPackage?.guestLimit;
+  const guestsForQuote =
+    packageGuestCap && guests > packageGuestCap ? packageGuestCap : guests;
+
+  useEffect(() => {
+    if (!open) return;
+    setPackageId(undefined);
+  }, [open, listing.id]);
+
+  useEffect(() => {
+    if (!packageId) return;
+    if (!packages.some((pkg) => pkg.id === packageId)) setPackageId(undefined);
+  }, [packages, packageId]);
+
+  const quote = useMemo(() => {
+    if (!startDate) return null;
+    if (needsPackage && !packageId) return null;
+    return quoteBooking(listing, {
+      guests: guestsForQuote,
+      startDate,
+      packageId,
+    });
+  }, [listing, guestsForQuote, startDate, packageId, needsPackage]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -92,7 +135,6 @@ export function BookingDialog({
       name: user?.name ?? "",
       email: user?.email ?? "",
       phone: "",
-      date: "",
       notes: "",
       notifyPreference: "call",
     },
@@ -104,7 +146,6 @@ export function BookingDialog({
       name: user.name,
       email: user.email,
       phone: form.getValues("phone"),
-      date: form.getValues("date"),
       notes: form.getValues("notes"),
       notifyPreference: form.getValues("notifyPreference"),
     });
@@ -114,13 +155,15 @@ export function BookingDialog({
     mutationFn: (values: FormValues) =>
       createBooking({
         listing,
-        guests,
-        date: values.date,
-        total,
+        guests: guestsForQuote,
+        date: startDate,
+        packageId,
+        total: quote?.total ?? total,
         customer: values.name,
         customerEmail: values.email,
         customerPhone: values.phone,
         notifyPreference: values.notifyPreference,
+        guestCheckout: !user,
       }),
     onSuccess: (booking) => {
       cacheBookingConfirmation(booking);
@@ -129,7 +172,13 @@ export function BookingDialog({
         description: `Reference ${booking.reference} — awaiting admin approval.`,
       });
     },
-    onError: () => toast.error("Something went wrong. Please try again."),
+    onError: (error) => {
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : "Something went wrong. Please try again.";
+      toast.error(message);
+    },
   });
 
   const close = (v: boolean) => {
@@ -137,6 +186,7 @@ export function BookingDialog({
     if (!v) {
       setTimeout(() => {
         setConfirmed(null);
+        setPackageId(undefined);
         form.reset();
       }, 250);
     }
@@ -159,12 +209,26 @@ export function BookingDialog({
     }
   };
 
-  const countdown = confirmed
+  const tripStart = confirmed ? bookingStartYmd(confirmed) : startDate;
+  const countdown = tripStart
     ? Math.max(
         0,
-        Math.ceil((new Date(confirmed.date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+        Math.ceil(
+          (Date.parse(`${tripStart}T00:00:00Z`) - Date.now()) / (1000 * 60 * 60 * 24),
+        ),
       )
     : 0;
+
+  const scheduleLabel = listingUsesSchedule(listing.kind)
+    ? quote
+      ? `${formatDateTime(quote.startDate, quote.startTime)} → ${formatDateTime(quote.endDate, quote.endTime)}`
+      : startDate
+    : startDate;
+
+  const canSubmit =
+    !!startDate &&
+    (!needsPackage || (!!packageId && packages.length > 0 && !!quote?.packageId)) &&
+    !!quote;
 
   return (
     <Dialog open={open} onOpenChange={close}>
@@ -198,7 +262,7 @@ export function BookingDialog({
                 <BookingQrCode reference={confirmed.reference} size={112} className="rounded-lg" />
               </div>
               <p className="mt-2 text-xs text-muted-foreground">
-                Scan this code to open your live reservation details — listing, date, guests, total,
+                Scan this code to open your live reservation details — listing, dates, guests, total,
                 and status.
               </p>
               <p className="mt-3 font-mono text-lg font-semibold tracking-wider">
@@ -215,14 +279,11 @@ export function BookingDialog({
                 </Link>
               </Button>
               <Separator className="my-4" />
-              <dl className="space-y-2 text-left text-sm">
-                <Row label="Listing" value={confirmed.listingTitle} />
-                <Row label="Date" value={confirmed.date} />
-                <Row label="Guests" value={String(confirmed.guests)} />
-                <Row label="Total" value={peso(confirmed.total)} />
-                <Row label="Payment" value={confirmed.paid ? "Paid" : "Pay on arrival"} />
-                <Row label="Status" value={bookingStatusLabel(confirmed.status)} />
-              </dl>
+              <BookingDetailsList booking={confirmed} />
+              <div className="mt-3 flex justify-between gap-4 text-sm">
+                <span className="text-muted-foreground">Payment</span>
+                <span className="font-medium">{confirmed.paid ? "Paid" : "Pay on arrival"}</span>
+              </div>
             </div>
 
             {!user && ready ? (
@@ -343,13 +404,88 @@ export function BookingDialog({
             <DialogHeader>
               <DialogTitle className="font-display text-xl">Complete your booking</DialogTitle>
               <DialogDescription>
-                {listing.title} · {guests} {guests === 1 ? "guest" : "guests"} · {peso(total)} total
+                {listing.title} · {guestsForQuote} {guestsForQuote === 1 ? "guest" : "guests"}
+                {quote ? ` · ${peso(quote.total)} total` : needsPackage ? " · choose a package" : ""}
               </DialogDescription>
             </DialogHeader>
 
+            {needsPackage ? (
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm font-medium">Choose a package tier</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Review inclusions, duration, and billing for each tier before confirming.
+                  </p>
+                </div>
+                <PackagePicker
+                  packages={packages}
+                  selectedId={packageId}
+                  onSelect={(pkg) => setPackageId(pkg.id)}
+                />
+              </div>
+            ) : null}
+
+            <div className="rounded-2xl border border-border bg-secondary/40 p-4 text-sm">
+              {quote?.packageName ? (
+                <p>
+                  <span className="text-muted-foreground">Package:</span>{" "}
+                  <strong>{quote.packageName}</strong>
+                  {quote.packagePrice != null
+                    ? ` · ${peso(quote.packagePrice)} ${PACKAGE_BILLING_LABELS[packageBilling].toLowerCase()}`
+                    : ""}
+                </p>
+              ) : null}
+              <p className={quote?.packageName ? "mt-1" : undefined}>
+                <span className="text-muted-foreground">Start:</span>{" "}
+                <strong>
+                  {quote
+                    ? formatDateTime(quote.startDate, quote.startTime)
+                    : startDate}
+                </strong>
+              </p>
+              {quote && listingUsesSchedule(listing.kind) ? (
+                <>
+                  <p className="mt-1">
+                    <span className="text-muted-foreground">End:</span>{" "}
+                    <strong>{formatDateTime(quote.endDate, quote.endTime)}</strong>
+                  </p>
+                  <p className="mt-1 text-muted-foreground">
+                    {formatDurationLabel(quote.durationDays, quote.durationNights)}
+                  </p>
+                </>
+              ) : needsPackage && !packageId ? (
+                <p className="mt-1 text-muted-foreground">
+                  End date and duration unlock after you select a package tier.
+                </p>
+              ) : (
+                <p className={quote?.packageName ? "mt-1" : undefined}>
+                  <span className="text-muted-foreground">
+                    {listingUsesSchedule(listing.kind) ? "Schedule:" : "Date:"}
+                  </span>{" "}
+                  <strong>{scheduleLabel}</strong>
+                </p>
+              )}
+              {quote ? (
+                <p className="mt-2 flex justify-between border-t border-border/60 pt-2 font-medium">
+                  <span className="text-muted-foreground">Total</span>
+                  <span>{peso(quote.total)}</span>
+                </p>
+              ) : null}
+            </div>
+
             <Form {...form}>
               <form
-                onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
+                onSubmit={form.handleSubmit((v) => {
+                  if (needsPackage && !packageId) {
+                    toast.error("Please select a package tier.");
+                    return;
+                  }
+                  if (packageGuestCap && guests > packageGuestCap) {
+                    toast.error(`This package is limited to ${packageGuestCap} guests.`);
+                    return;
+                  }
+                  mutation.mutate(v);
+                })}
                 className="mt-2 space-y-4"
               >
                 <FormField
@@ -393,19 +529,6 @@ export function BookingDialog({
                     )}
                   />
                 </div>
-                <FormField
-                  control={form.control}
-                  name="date"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Preferred date</FormLabel>
-                      <FormControl>
-                        <Input type="date" className="h-11 rounded-xl" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 <FormField
                   control={form.control}
                   name="notifyPreference"
@@ -452,7 +575,7 @@ export function BookingDialog({
                   variant="hero"
                   size="lg"
                   className="w-full rounded-full"
-                  disabled={mutation.isPending}
+                  disabled={mutation.isPending || !canSubmit}
                 >
                   {mutation.isPending ? (
                     <>
@@ -460,7 +583,8 @@ export function BookingDialog({
                     </>
                   ) : (
                     <>
-                      <CalendarDays className="size-4" /> Confirm booking · {peso(total)}
+                      <CalendarDays className="size-4" /> Confirm booking
+                      {quote ? ` · ${peso(quote.total)}` : ""}
                     </>
                   )}
                 </Button>
@@ -473,14 +597,5 @@ export function BookingDialog({
         )}
       </DialogContent>
     </Dialog>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex justify-between gap-4">
-      <dt className="shrink-0 text-muted-foreground">{label}</dt>
-      <dd className="truncate text-right font-medium">{value}</dd>
-    </div>
   );
 }

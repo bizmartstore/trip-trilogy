@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, BadgeCheck, CalendarRange, Compass, ShieldCheck, Sparkles, UtensilsCrossed, Hotel, Tent } from "lucide-react";
+import { ArrowRight, BadgeCheck, CalendarRange, Compass, Gift, ShieldCheck, Sparkles, UtensilsCrossed, Hotel, Tent } from "lucide-react";
 
 import { Hero } from "@/components/home/hero";
 import { SearchStrip } from "@/components/home/search-strip";
@@ -35,6 +35,7 @@ const categories = [
   { icon: Tent, label: "Tours & experiences", copy: "Guided, private and small group", kind: "tour" as const },
   { icon: Hotel, label: "Hotels & resorts", copy: "Boutique stays to beach villas", kind: "stay" as const },
   { icon: UtensilsCrossed, label: "Restaurants", copy: "Tables worth flying for", kind: "restaurant" as const },
+  { icon: Gift, label: "Travel packages", copy: "Standard, Premium & Luxury tiers", kind: "package" as const },
   { icon: Compass, label: "Trip planner", copy: "Auto-built itineraries", kind: "all" as const },
 ];
 

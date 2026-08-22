@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { defaultFilters, destinationOptions, searchListings, tagOptions } from "@/lib/api";
+import { defaultFilters, fetchDestinations, namesFromDestinationCatalog, searchListings, tagOptions } from "@/lib/api";
 import type { ListingKind, SearchFilters } from "@/lib/types";
 import { peso } from "@/lib/utils";
 
@@ -33,7 +33,7 @@ type ExploreSearch = {
 export const Route = createFileRoute("/explore")({
   validateSearch: (search: Record<string, unknown>): ExploreSearch => ({
     q: typeof search.q === "string" ? search.q : undefined,
-    kind: ["all", "tour", "stay", "restaurant"].includes(String(search.kind))
+    kind: ["all", "tour", "stay", "restaurant", "package"].includes(String(search.kind))
       ? (search.kind as ListingKind | "all")
       : undefined,
     destination: typeof search.destination === "string" ? search.destination : undefined,
@@ -84,6 +84,8 @@ function Explore() {
     queryKey: ["search", filters],
     queryFn: () => searchListings(filters),
   });
+  const destinations = useQuery({ queryKey: ["destinations"], queryFn: fetchDestinations });
+  const destinationNames = namesFromDestinationCatalog(destinations.data);
 
   const toggleTag = (t: string) =>
     setTags((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
@@ -112,7 +114,7 @@ function Explore() {
           </SelectTrigger>
           <SelectContent className="rounded-2xl">
             <SelectItem value="all">Anywhere</SelectItem>
-            {destinationOptions().map((d) => (
+            {destinationNames.map((d) => (
               <SelectItem key={d} value={d}>
                 {d}
               </SelectItem>
@@ -184,7 +186,7 @@ function Explore() {
         >
           <h1 className="text-3xl font-semibold sm:text-4xl">Explore Nexora</h1>
           <p className="mt-2 text-muted-foreground">
-            One search across tour packages, hotels, resorts, restaurants and destinations.
+            One search across tour packages, multi-day packages, hotels, resorts, restaurants and destinations.
           </p>
           <div className="mt-6">
             <SearchBar compact />
@@ -201,6 +203,7 @@ function Explore() {
             <TabsTrigger value="tour" className="rounded-full">Tours</TabsTrigger>
             <TabsTrigger value="stay" className="rounded-full">Stays</TabsTrigger>
             <TabsTrigger value="restaurant" className="rounded-full">Dining</TabsTrigger>
+            <TabsTrigger value="package" className="rounded-full">Packages</TabsTrigger>
           </TabsList>
         </Tabs>
 

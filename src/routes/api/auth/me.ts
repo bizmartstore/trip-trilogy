@@ -13,10 +13,8 @@ export const Route = createFileRoute("/api/auth/me")({
           if (!ready.ok) return ready.response;
 
           const user = await getSessionUser(request);
-          if (!user) {
-            return Response.json({ user: null }, { status: 401 });
-          }
-          return Response.json({ user });
+          // 200 + null = guest (not an auth failure). Avoids console 401 spam from useAuth probes.
+          return Response.json({ user: user ?? null });
         } catch (error) {
           return Response.json(
             {

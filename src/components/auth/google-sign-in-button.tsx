@@ -36,9 +36,11 @@ function loadGsi(): Promise<void> {
 
 export function GoogleSignInButton() {
   const ref = useRef<HTMLDivElement>(null);
+  const initialized = useRef(false);
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -47,25 +49,31 @@ export function GoogleSignInButton() {
       try {
         const { clientId } = await getGoogleClientId();
         if (!clientId) {
-          setError("Google sign-in is not configured yet.");
+          setError(
+            "Google sign-in needs GOOGLE_OAUTH_CLIENT_ID on the server (same Web client ID as in Supabase → Authentication → Google).",
+          );
           return;
         }
         await loadGsi();
-        if (cancelled || !ref.current) return;
+        if (cancelled || !ref.current || initialized.current) return;
 
         const width = Math.min(360, Math.max(280, ref.current.parentElement?.clientWidth ?? 320));
 
         window.google.accounts.id.initialize({
           client_id: clientId,
-          callback: async (response: { credential: string }) => {
+          auto_select: false,
+          cancel_on_tap_outside: true,
+          callback: async (response: { credential?: string }) => {
+            const idToken = typeof response?.credential === "string" ? response.credential.trim() : "";
+            if (!idToken || idToken.split(".").length < 3) {
+              toast.error("Google did not return a sign-in token. Try again.");
+              return;
+            }
+            setBusy(true);
             try {
-              const profile = decodeIdToken(response.credential);
-              if (!profile.email) {
-                toast.error("Google did not return an email address.");
-                return;
-              }
+              const profile = decodeIdToken(idToken);
               const account = await oauthSignIn({
-                idToken: response.credential,
+                idToken,
                 name: profile.name ?? "Traveller",
                 email: profile.email,
                 picture: profile.picture,
@@ -76,17 +84,28 @@ export function GoogleSignInButton() {
                 picture: account.picture,
                 role: account.role,
               });
-              toast.success(`Welcome, ${account.name}`);
-              navigate({
-                to: account.role === "admin" ? "/admin" : "/dashboard",
+              void import("@/lib/push-auth").then(({ syncPushAfterAuth }) => {
+                syncPushAfterAuth(account, {
+                  isNewAccount: Boolean((account as { isNew?: boolean }).isNew),
+                });
               });
-              if (isMainAdminEmail(account.email)) {
-                toast.message("Main admin access granted");
+              if (account.role === "admin") {
+                toast.success(
+                  isMainAdminEmail(account.email)
+                    ? "Welcome, main admin"
+                    : "Welcome, admin",
+                );
+                navigate({ to: "/admin" });
+              } else {
+                toast.success(`Welcome, ${account.name}`);
+                navigate({ to: "/dashboard" });
               }
             } catch (err) {
               toast.error(
                 err instanceof Error ? err.message : "Could not complete Google sign-in.",
               );
+            } finally {
+              setBusy(false);
             }
           },
         });
@@ -99,6 +118,7 @@ export function GoogleSignInButton() {
           width,
           logo_alignment: "center",
         });
+        initialized.current = true;
         setLoaded(true);
       } catch {
         if (!cancelled) setError("Google sign-in could not load. Check your connection.");
@@ -115,9 +135,13 @@ export function GoogleSignInButton() {
   }
 
   return (
-    <div className="flex w-full justify-center">
+    <div className="flex w-full flex-col items-center gap-2">
       {!loaded ? <Skeleton className="h-11 w-full max-w-[360px] rounded-full" /> : null}
-      <div ref={ref} className={loaded ? "w-full max-w-[360px]" : "hidden"} />
+      <div
+        ref={ref}
+        className={loaded ? `w-full max-w-[360px] ${busy ? "pointer-events-none opacity-60" : ""}` : "hidden"}
+      />
+      {busy ? <p className="text-xs text-muted-foreground">Signing you in…</p> : null}
     </div>
   );
 }

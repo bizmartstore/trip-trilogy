@@ -1,4 +1,5 @@
 import { useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, MapPin, Search, Users } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
@@ -11,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { destinationOptions } from "@/lib/api";
+import { fetchDestinations, namesFromDestinationCatalog } from "@/lib/api";
 import type { ListingKind } from "@/lib/types";
 
 const kinds: { value: ListingKind | "all"; label: string }[] = [
@@ -19,6 +20,7 @@ const kinds: { value: ListingKind | "all"; label: string }[] = [
   { value: "tour", label: "Tours" },
   { value: "stay", label: "Stays" },
   { value: "restaurant", label: "Dining" },
+  { value: "package", label: "Packages" },
 ];
 
 export function SearchBar({ compact = false }: { compact?: boolean }) {
@@ -26,6 +28,8 @@ export function SearchBar({ compact = false }: { compact?: boolean }) {
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<ListingKind | "all">("all");
   const [destination, setDestination] = useState("all");
+  const destinations = useQuery({ queryKey: ["destinations"], queryFn: fetchDestinations });
+  const destinationNames = namesFromDestinationCatalog(destinations.data);
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -46,7 +50,7 @@ export function SearchBar({ compact = false }: { compact?: boolean }) {
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search tours, hotels, restaurants, cities…"
+          placeholder="Search tours, packages, hotels, restaurants, cities…"
           aria-label="Search"
           className="h-12 border-0 bg-transparent px-0 text-base shadow-none focus-visible:ring-0"
         />
@@ -64,7 +68,7 @@ export function SearchBar({ compact = false }: { compact?: boolean }) {
         </SelectTrigger>
         <SelectContent className="rounded-2xl">
           <SelectItem value="all">Anywhere</SelectItem>
-          {destinationOptions().map((d) => (
+          {destinationNames.map((d) => (
             <SelectItem key={d} value={d}>
               {d}
             </SelectItem>

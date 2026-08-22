@@ -33,6 +33,7 @@ const nav = [
   { to: "/explore", label: "Tours", search: { kind: "tour" as const } },
   { to: "/explore", label: "Stays", search: { kind: "stay" as const } },
   { to: "/explore", label: "Dining", search: { kind: "restaurant" as const } },
+  { to: "/explore", label: "Packages", search: { kind: "package" as const } },
 ];
 
 export function Navbar() {

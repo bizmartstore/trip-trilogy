@@ -1,4 +1,28 @@
-export type ListingKind = "tour" | "stay" | "restaurant";
+export type ListingKind = "tour" | "stay" | "restaurant" | "package";
+
+export type PricingType = "per_person" | "per_night" | "per_package";
+
+/** How a package tier bills once selected (not the listing-level pricing mode). */
+export type PackageBillingType = "per_person" | "per_night";
+
+export interface ListingPackage {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  inclusions: string[];
+  exclusions?: string[];
+  guestLimit?: number;
+  image?: string;
+  active: boolean;
+  position: number;
+  /** Days this tier occupies on the calendar (e.g. Standard = 2). */
+  durationDays?: number;
+  /** Nights this tier occupies (e.g. Standard = 1 for 2D1N). */
+  durationNights?: number;
+  /** Bill price × guests or price × nights for this tier. */
+  pricingType?: PackageBillingType;
+}
 
 export type UserRole = "visitor" | "tourist" | "admin";
 
@@ -7,6 +31,8 @@ export type BookingStatus =
   | "approved"
   | "confirmed"
   | "completed"
+  | "partial_payment"
+  | "completed_payment"
   | "cancelled"
   | "rejected";
 
@@ -19,6 +45,15 @@ export interface Destination {
   image: string;
   listings: number;
   tagline: string;
+  coords?: { lat: number; lng: number };
+}
+
+export interface DestinationInput {
+  name: string;
+  country: string;
+  tagline: string;
+  image?: string;
+  coords?: { lat: number; lng: number } | null;
 }
 
 export interface Review {
@@ -85,13 +120,32 @@ export interface Listing {
   amenities: string[];
   tags: string[];
   durationDays?: number;
+  durationNights?: number;
+  /** HH:mm, used as the reservation start time. */
+  startTime?: string;
+  /** HH:mm, used as the reservation end time. */
+  endTime?: string;
+  /** When true (default), end date is start date + duration. */
+  autoEndDate?: boolean;
+  pricingType?: PricingType;
+  /**
+   * IDs of reusable catalog packages available for this listing.
+   * When set, package details are resolved from the hub package catalog.
+   */
+  packageIds?: string[];
+  /** Resolved / legacy embedded package tiers (hydrated from catalog when possible). */
+  packages?: ListingPackage[];
   seatsLeft?: number;
   discountPct?: number;
   featured?: boolean;
   status: BusinessStatus;
   businessName: string;
   createdAt: string;
-  coords: { lat: number; lng: number };
+  coords?: { lat: number; lng: number };
+  /** When false, the public listing hides the location map. Defaults to shown. */
+  showMap?: boolean;
+  /** Positive hide flag so “map off” still persists if `false` is stripped. */
+  mapHidden?: boolean;
   inclusions?: string[];
   exclusions?: string[];
   itinerary?: ItineraryDay[];
@@ -100,6 +154,18 @@ export interface Listing {
   faqs?: { q: string; a: string }[];
   cancellationPolicy?: string;
   reviews?: Review[];
+  /**
+   * When false, the listing stays visible but cannot be opened/booked.
+   * Defaults to available (undefined / true).
+   */
+  available?: boolean;
+  /** Shown on cards when `available === false` (e.g. “Fully booked”). */
+  unavailableReason?: string;
+}
+
+/** Public listings are bookable unless explicitly marked unavailable. */
+export function isListingAvailable(listing: Pick<Listing, "available">) {
+  return listing.available !== false;
 }
 
 export interface Booking {
@@ -110,10 +176,27 @@ export interface Booking {
   kind: ListingKind;
   image: string;
   guests: number;
+  /** Start date (YYYY-MM-DD). Kept for historical single-day bookings. */
   date: string;
+  startDate?: string;
+  startTime?: string;
+  endDate?: string;
+  endTime?: string;
+  durationDays?: number;
+  durationNights?: number;
+  pricingType?: PricingType;
+  packageId?: string;
+  packageNameSnapshot?: string;
+  packagePriceSnapshot?: number;
+  packageSnapshot?: ListingPackage;
+  subtotal?: number;
   total: number;
   status: BookingStatus;
   paid: boolean;
+  /** Payment gateway the tourist chose (e.g. "paymaya"). */
+  paymentMethod?: string;
+  /** When the admin confirmed a (partial / full) payment was received. */
+  paidAt?: string;
   customer: string;
   customerEmail?: string;
   createdAt?: string;
@@ -129,6 +212,8 @@ export interface Booking {
   statusBy?: string;
   /** Internal note attached by the admin when approving / rejecting. */
   adminNote?: string;
+  /** True when the reservation was submitted without a registered account (guest checkout). */
+  guestCheckout?: boolean;
 }
 
 export type NotifyPreference = "call" | "sms" | "email" | "any";
@@ -201,6 +286,13 @@ export interface ListingInput {
   featured?: boolean;
   status?: BusinessStatus;
   durationDays?: number;
+  durationNights?: number;
+  startTime?: string;
+  endTime?: string;
+  autoEndDate?: boolean;
+  pricingType?: PricingType;
+  packageIds?: string[];
+  packages?: ListingPackage[];
   seatsLeft?: number;
   discountPct?: number;
   inclusions?: string[];
@@ -209,4 +301,26 @@ export interface ListingInput {
   rooms?: RoomType[];
   menu?: MenuItem[];
   cancellationPolicy?: string;
+  coords?: { lat: number; lng: number } | null;
+  showMap?: boolean;
+  mapHidden?: boolean;
+  available?: boolean;
+  unavailableReason?: string;
+}
+
+/** Admin create/update payload for the global travel package catalog. */
+export interface PackageInput {
+  name: string;
+  description: string;
+  price: number;
+  inclusions: string[];
+  exclusions?: string[];
+  /** `null` clears a previously saved guest limit. */
+  guestLimit?: number | null;
+  image?: string | null;
+  active?: boolean;
+  position?: number;
+  durationDays?: number | null;
+  durationNights?: number | null;
+  pricingType?: PackageBillingType;
 }

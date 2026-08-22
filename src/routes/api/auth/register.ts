@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { prepareAuthRequest } from "@/lib/auth-route.server";
+import { normalizeAccountName } from "@/lib/constants";
 import { registerAccount } from "@/lib/store.server";
 import { createSessionToken, jsonWithSession } from "@/lib/session.server";
 
@@ -21,7 +22,7 @@ export const Route = createFileRoute("/api/auth/register")({
           }
           const data = (body as { data?: unknown })?.data ?? body;
           const parsed = data as { name?: unknown; email?: unknown; password?: unknown };
-          const name = typeof parsed.name === "string" ? parsed.name.trim() : "";
+          const name = typeof parsed.name === "string" ? normalizeAccountName(parsed.name) : "";
           const email = typeof parsed.email === "string" ? parsed.email.trim() : "";
           const password = typeof parsed.password === "string" ? parsed.password : "";
           if (name.length < 2 || !email.includes("@") || password.length < 8) {

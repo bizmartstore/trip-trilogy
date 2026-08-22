@@ -5,7 +5,8 @@ import { StatusBadge } from "@/components/shared/status-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { fetchBookingFeed } from "@/lib/api";
-import type { BookingStatus } from "@/lib/types";
+import { bookingDateRangeLabel, bookingDurationLabel } from "@/lib/booking-model";
+import type { Booking, BookingStatus } from "@/lib/types";
 import { peso } from "@/lib/utils";
 
 function timeAgo(iso: string) {
@@ -20,7 +21,7 @@ function timeAgo(iso: string) {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-/** Live reservation feed — polls the Supabase bookings table every few seconds. */
+/** Live reservation feed — polls for new reservations every few seconds. */
 export function LiveBookingFeed() {
   const feed = useQuery({
     queryKey: ["booking-feed"],
@@ -36,11 +37,7 @@ export function LiveBookingFeed() {
           <Radio className="size-4 animate-pulse text-success" /> Live reservation feed
         </p>
         <Badge className="rounded-full border-0 bg-success/15 text-success">
-          {feed.data?.source === "supabase"
-            ? "Supabase · live"
-            : feed.data?.bookings.length
-              ? "Hub · synced"
-              : "Waiting for bookings"}
+          {feed.data?.bookings.length ? "Live" : "Listening"}
         </Badge>
       </div>
 
@@ -58,9 +55,20 @@ export function LiveBookingFeed() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold">
                   {b.customer} · <span className="font-mono text-xs">{b.reference}</span>
+                  {(b as Booking).guestCheckout ? (
+                    <span className="ml-2 rounded-full border border-primary/40 bg-primary/10 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-primary">
+                      Guest
+                    </span>
+                  ) : null}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {b.listingTitle} · {b.guests} guest{b.guests === 1 ? "" : "s"} · {b.date}
+                  {b.listingTitle} · {b.guests} guest{b.guests === 1 ? "" : "s"}
+                  {b.packageNameSnapshot ? ` · ${b.packageNameSnapshot}` : ""}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {bookingDateRangeLabel(b as Booking)}
+                  {" · "}
+                  {bookingDurationLabel(b as Booking)}
                 </p>
                 {b.customerPhone ? (
                   <p className="truncate text-xs text-muted-foreground">{b.customerPhone}</p>

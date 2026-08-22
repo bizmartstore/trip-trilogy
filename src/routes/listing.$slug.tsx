@@ -1,5 +1,5 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import {
   BadgeCheck,
@@ -16,7 +16,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { ListingCard } from "@/components/listings/listing-card";
@@ -25,15 +25,33 @@ import { BookingDialog } from "@/components/booking/booking-dialog";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { fetchFavorites, fetchListingBySlug, fetchRelated, toggleFavorite } from "@/lib/api";
-import type { Listing } from "@/lib/types";
+import {
+  activePackages,
+  discountedUnitPrice,
+  formatDateTime,
+  formatDurationLabel,
+  listingDurationLabel,
+  listingUsesSchedule,
+  PRICING_TYPE_LABELS,
+  quoteBooking,
+  resolvePricingType,
+  unitLabelForPricing,
+} from "@/lib/booking-model";
+import { listingShowsMap, osmEmbedUrl, resolveListingCoords } from "@/lib/listing-map";
+import { isListingAvailable, type Listing } from "@/lib/types";
 import { peso } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 
 export const Route = createFileRoute("/listing/$slug")({
+  headers: () => ({
+    "Cache-Control": "private, no-store, max-age=0, must-revalidate",
+  }),
   loader: async ({ params }) => {
     const listing = await fetchListingBySlug(params.slug);
     if (!listing) throw notFound();
@@ -79,15 +97,57 @@ function ListingDetail() {
   const { listing: initialListing } = Route.useLoaderData() as { listing: Listing };
   const { user } = useAuth();
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const [guests, setGuests] = useState(2);
+  const [startDate, setStartDate] = useState("");
   const [open, setOpen] = useState(false);
 
   const listingQuery = useQuery({
     queryKey: ["listing", initialListing.slug],
     queryFn: () => fetchListingBySlug(initialListing.slug),
     initialData: initialListing,
+    staleTime: 0,
+    refetchOnMount: "always",
   });
   const listing = listingQuery.data ?? initialListing;
+  const available = isListingAvailable(listing);
+  const pricingType = resolvePricingType(listing);
+  const packages = useMemo(() => activePackages(listing), [listing]);
+  const needsPackage = pricingType === "per_package";
+  const usesSchedule = listingUsesSchedule(listing.kind);
+  const durationLabel = listingDurationLabel(listing);
+  const unitLabel = unitLabelForPricing(pricingType, listing.kind);
+  const fromPackagePrice = packages.length
+    ? Math.min(...packages.map((pkg) => discountedUnitPrice(pkg.price, listing.discountPct)))
+    : null;
+
+  const quote = useMemo(() => {
+    // Package listings quote only after a tier is chosen inside Reserve Now.
+    if (!startDate || needsPackage) return null;
+    return quoteBooking(listing, {
+      guests,
+      startDate,
+    });
+  }, [listing, guests, startDate, needsPackage]);
+
+  const displayUnitPrice =
+    quote?.unitPrice ??
+    (listing.discountPct
+      ? Math.round(listing.price * (1 - listing.discountPct / 100))
+      : listing.price);
+  const total =
+    quote?.total ??
+    (needsPackage
+      ? (fromPackagePrice ?? displayUnitPrice) *
+        (packages[0] && packages[0].pricingType === "per_night" ? 1 : guests)
+      : pricingType === "per_night"
+        ? displayUnitPrice
+        : displayUnitPrice * guests);
+  const maxGuests = 12;
+
+  useEffect(() => {
+    if (guests > maxGuests) setGuests(maxGuests);
+  }, [guests, maxGuests]);
 
   const favorites = useQuery({
     queryKey: ["favorites", user?.email],
@@ -100,7 +160,7 @@ function ListingDetail() {
     mutationFn: () => toggleFavorite(user!.email, listing.id),
     onSuccess: (result) => {
       toast.success(result.saved ? "Saved to favourites" : "Removed from favourites");
-      void favorites.refetch();
+      void qc.invalidateQueries({ queryKey: ["favorites", user?.email] });
     },
     onError: () => toast.error("Sign in to save listings"),
   });
@@ -114,10 +174,10 @@ function ListingDetail() {
     ? listing.reviews?.some((r) => r.email === user.email.toLowerCase())
     : false;
 
-  const unitPrice = listing.discountPct
-    ? Math.round(listing.price * (1 - listing.discountPct / 100))
-    : listing.price;
-  const total = unitPrice * guests;
+  const canReserve =
+    available &&
+    !!startDate &&
+    (!needsPackage || packages.length > 0);
 
   return (
     <div className="pt-24">
@@ -149,6 +209,16 @@ function ListingDetail() {
             <h1 className="mt-4 text-3xl font-semibold sm:text-4xl">{listing.title}</h1>
             <p className="mt-2 text-lg text-muted-foreground">{listing.tagline}</p>
 
+            {!available ? (
+              <div className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <p className="font-semibold">Not available</p>
+                <p className="mt-1">
+                  {listing.unavailableReason?.trim() ||
+                    "This listing cannot be reserved right now."}
+                </p>
+              </div>
+            ) : null}
+
             <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5">
                 <Star className="size-4 fill-gold text-gold" />
@@ -164,7 +234,11 @@ function ListingDetail() {
               <span className="flex items-center gap-1.5">
                 <MapPin className="size-4" /> {listing.destination}, {listing.country}
               </span>
-              {listing.durationDays ? (
+              {durationLabel ? (
+                <span className="flex items-center gap-1.5">
+                  <Clock className="size-4" /> {durationLabel}
+                </span>
+              ) : listing.durationDays ? (
                 <span className="flex items-center gap-1.5">
                   <Clock className="size-4" /> {listing.durationDays} day
                   {listing.durationDays > 1 ? "s" : ""}
@@ -179,7 +253,7 @@ function ListingDetail() {
                 className="rounded-full"
                 onClick={() => {
                   if (!user) {
-                    toast.error("Sign in to save listings");
+                    void navigate({ to: "/auth" });
                     return;
                   }
                   save.mutate();
@@ -399,7 +473,6 @@ function ListingDetail() {
             </Tabs>
           </div>
 
-          {/* Booking panel */}
           <aside>
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -408,18 +481,71 @@ function ListingDetail() {
               className="sticky top-28 rounded-3xl border border-border bg-card p-6 shadow-lift"
             >
               <div className="flex items-end gap-2">
-                {listing.discountPct ? (
+                {listing.discountPct && pricingType !== "per_package" ? (
                   <span className="text-base text-muted-foreground line-through">{peso(listing.price)}</span>
                 ) : null}
-                <span className="font-display text-3xl font-semibold">{peso(unitPrice)}</span>
-                <span className="pb-1 text-sm text-muted-foreground">{listing.unit}</span>
+                {needsPackage ? (
+                  <>
+                    <span className="pb-1 text-sm text-muted-foreground">From</span>
+                    <span className="font-display text-3xl font-semibold">
+                      {peso(fromPackagePrice ?? displayUnitPrice)}
+                    </span>
+                  </>
+                ) : (
+                  <span className="font-display text-3xl font-semibold">{peso(displayUnitPrice)}</span>
+                )}
+                <span className="pb-1 text-sm text-muted-foreground">
+                  {needsPackage ? "per package" : unitLabel}
+                </span>
               </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {needsPackage
+                  ? packages.length
+                    ? `${packages.length} package tier${packages.length === 1 ? "" : "s"} · choose on Reserve`
+                    : "Package tiers open when you reserve"
+                  : PRICING_TYPE_LABELS[pricingType]}
+                {!needsPackage && durationLabel ? ` · ${durationLabel}` : ""}
+              </p>
 
               {listing.seatsLeft ? (
                 <p className="mt-2 text-sm font-medium text-warning-foreground">
-                  Only {listing.seatsLeft} spots left for the next date
+                  Capacity: {listing.seatsLeft} guest{listing.seatsLeft === 1 ? "" : "s"} max across
+                  overlapping dates
                 </p>
               ) : null}
+
+              <Separator className="my-5" />
+
+              <div className="space-y-2">
+                <Label htmlFor="booking-start-date" className="text-sm font-medium">
+                  {usesSchedule ? "Start date" : "Preferred date"}
+                </Label>
+                <Input
+                  id="booking-start-date"
+                  type="date"
+                  className="h-11 rounded-xl"
+                  value={startDate}
+                  min={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+                {quote && usesSchedule && !needsPackage ? (
+                  <div className="rounded-2xl bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
+                    <p>
+                      <span className="font-medium text-foreground">End:</span>{" "}
+                      {formatDateTime(quote.endDate, quote.endTime)}
+                    </p>
+                    <p className="mt-0.5">
+                      <span className="font-medium text-foreground">Duration:</span>{" "}
+                      {formatDurationLabel(quote.durationDays, quote.durationNights)}
+                    </p>
+                  </div>
+                ) : null}
+                {needsPackage ? (
+                  <p className="text-xs text-muted-foreground">
+                    End date and duration appear after you choose a package tier.
+                  </p>
+                ) : null}
+              </div>
 
               <Separator className="my-5" />
 
@@ -443,7 +569,7 @@ function ListingDetail() {
                     variant="outline"
                     className="size-8 rounded-full"
                     aria-label="Increase guests"
-                    onClick={() => setGuests((g) => Math.min(12, g + 1))}
+                    onClick={() => setGuests((g) => Math.min(maxGuests, g + 1))}
                   >
                     <Plus className="size-3.5" />
                   </Button>
@@ -453,33 +579,83 @@ function ListingDetail() {
               <Separator className="my-5" />
 
               <dl className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-muted-foreground">
-                    {peso(unitPrice)} × {guests}
-                  </dt>
-                  <dd>{peso(unitPrice * guests)}</dd>
-                </div>
+                {pricingType === "per_person" ? (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">
+                      {peso(displayUnitPrice)} × {guests} guest{guests === 1 ? "" : "s"}
+                    </dt>
+                    <dd>{peso(displayUnitPrice * guests)}</dd>
+                  </div>
+                ) : null}
+                {pricingType === "per_night" && quote ? (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">
+                      {peso(displayUnitPrice)} ×{" "}
+                      {Math.max(1, quote.durationNights || quote.durationDays)} night
+                      {Math.max(1, quote.durationNights || quote.durationDays) === 1 ? "" : "s"}
+                    </dt>
+                    <dd>{peso(quote.subtotal)}</dd>
+                  </div>
+                ) : null}
+                {needsPackage ? (
+                  <div className="flex justify-between">
+                    <dt className="text-muted-foreground">Package total</dt>
+                    <dd className="text-muted-foreground">After tier selection</dd>
+                  </div>
+                ) : null}
                 <div className="flex justify-between">
                   <dt className="text-muted-foreground">Service fee</dt>
                   <dd className="text-success">Included</dd>
                 </div>
                 <div className="flex justify-between border-t border-border pt-3 text-base font-semibold">
                   <dt>Total</dt>
-                  <dd>{peso(total)}</dd>
+                  <dd>{needsPackage ? "—" : peso(total)}</dd>
                 </div>
               </dl>
 
-              <Button variant="hero" size="xl" className="mt-6 w-full" onClick={() => setOpen(true)}>
-                <CalendarDays className="size-4.5" /> Reserve now
+              <Button
+                variant="hero"
+                size="xl"
+                className="mt-6 w-full"
+                disabled={!available}
+                onClick={() => {
+                  if (!available) {
+                    toast.error(
+                      listing.unavailableReason?.trim() ||
+                        "This listing is currently unavailable.",
+                    );
+                    return;
+                  }
+                  if (!startDate) {
+                    toast.error(usesSchedule ? "Choose a start date." : "Choose a date.");
+                    return;
+                  }
+                  if (needsPackage && packages.length === 0) {
+                    toast.error("Packages are not configured for this listing yet.");
+                    return;
+                  }
+                  setOpen(true);
+                }}
+              >
+                <CalendarDays className="size-4.5" />{" "}
+                {available
+                  ? needsPackage
+                    ? "Reserve now"
+                    : canReserve
+                      ? `Reserve · ${peso(total)}`
+                      : "Reserve now"
+                  : "Unavailable"}
               </Button>
               <p className="mt-3 text-center text-xs text-muted-foreground">
-                {listing.cancellationPolicy}
+                {available
+                  ? listing.cancellationPolicy
+                  : listing.unavailableReason?.trim() ||
+                    "This listing is not accepting reservations."}
               </p>
             </motion.div>
           </aside>
         </div>
 
-        {/* Related */}
         <section className="section">
           <h2 className="text-2xl font-semibold sm:text-3xl">You might also like</h2>
           <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -493,11 +669,12 @@ function ListingDetail() {
       </div>
 
       <BookingDialog
-        open={open}
+        open={available && open}
         onOpenChange={setOpen}
         listing={listing}
         guests={guests}
-        total={total}
+        startDate={startDate}
+        total={needsPackage ? 0 : total}
       />
     </div>
   );
@@ -530,7 +707,9 @@ function Gallery({ listing }: { listing: Listing }) {
             onClick={() => setActive(i)}
             aria-label={`View image ${i + 1}`}
             className={`aspect-square overflow-hidden rounded-2xl transition-all md:aspect-auto ${
-              active === i ? "ring-2 ring-primary ring-offset-2 ring-offset-background" : "opacity-80 hover:opacity-100"
+              active === i
+                ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
+                : "opacity-80 hover:opacity-100"
             }`}
           >
             <img src={src} alt="" loading="lazy" className="size-full object-cover" />
@@ -542,8 +721,9 @@ function Gallery({ listing }: { listing: Listing }) {
 }
 
 function MapPanel({ listing }: { listing: Listing }) {
-  const { lat, lng } = listing.coords;
-  const bbox = `${lng - 0.08},${lat - 0.06},${lng + 0.08},${lat + 0.06}`;
+  if (!listingShowsMap(listing)) return null;
+  const coords = resolveListingCoords(listing);
+  if (!coords) return null;
   return (
     <div>
       <h2 className="text-lg font-semibold">Location</h2>
@@ -555,7 +735,7 @@ function MapPanel({ listing }: { listing: Listing }) {
           title={`Map of ${listing.title}`}
           className="h-80 w-full"
           loading="lazy"
-          src={`https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`}
+          src={osmEmbedUrl(coords)}
         />
       </div>
     </div>

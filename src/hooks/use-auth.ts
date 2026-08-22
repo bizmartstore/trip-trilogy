@@ -12,21 +12,30 @@ const EVENT = "nexora-auth";
 /** In-memory session mirror — updated after sign-in and from /api/auth/me when available. */
 let cachedUser: AuthUser | null = null;
 
+/** Single-flight so Navbar + PushAuthBridge + pages don't spam /api/auth/me. */
+let inflightSession: Promise<AuthUser | null> | null = null;
+
 async function fetchSession(): Promise<AuthUser | null> {
-  try {
-    const res = await fetch("/api/auth/me", {
-      credentials: "same-origin",
-      headers: { accept: "application/json" },
-    });
-    if (res.ok) {
+  if (inflightSession) return inflightSession;
+  inflightSession = (async () => {
+    try {
+      const res = await fetch("/api/auth/me", {
+        credentials: "same-origin",
+        headers: { accept: "application/json" },
+      });
+      if (!res.ok) {
+        // Transient server error — keep the in-memory session if we have one.
+        return cachedUser;
+      }
       const data = (await res.json()) as { user?: AuthUser | null };
       return data.user ?? null;
+    } catch {
+      return cachedUser;
+    } finally {
+      inflightSession = null;
     }
-    if (res.status === 401) return cachedUser;
-    return cachedUser;
-  } catch {
-    return cachedUser;
-  }
+  })();
+  return inflightSession;
 }
 
 /** Set the signed-in user immediately after a successful auth API response. */
@@ -46,24 +55,24 @@ export function useAuth() {
 
   const refresh = useCallback(async () => {
     const session = await fetchSession();
-    if (session) cachedUser = session;
-    setUser(session ?? cachedUser);
+    cachedUser = session;
+    setUser(session);
     setReady(true);
-    return session ?? cachedUser;
+    return session;
   }, []);
 
   useEffect(() => {
-    refresh();
-    const sync = () => {
-      setUser(cachedUser);
-      refresh();
-    };
+    void refresh();
+    // Auth events only sync the in-memory user — do not re-hit /api/auth/me
+    // immediately after applyAuthUser (cookie race / console spam).
+    const sync = () => setUser(cachedUser);
     window.addEventListener(EVENT, sync);
     return () => window.removeEventListener(EVENT, sync);
   }, [refresh]);
 
   const signOut = useCallback(async () => {
     cachedUser = null;
+    setUser(null);
     try {
       await fetch("/api/auth/sign-out", {
         method: "POST",
@@ -72,7 +81,6 @@ export function useAuth() {
     } catch {
       // Non-fatal when the sign-out route is unavailable.
     }
-    setUser(null);
     window.dispatchEvent(new Event(EVENT));
   }, []);
 
@@ -85,7 +93,19 @@ export function decodeIdToken(token: string): {
   email?: string;
   picture?: string;
 } {
-  const [, payload] = token.split(".");
-  const json = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
-  return JSON.parse(decodeURIComponent(escape(json)));
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return {};
+    const padded = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
+    const json = atob(padded + pad);
+    const claims = JSON.parse(json) as {
+      name?: string;
+      email?: string;
+      picture?: string;
+    };
+    return claims;
+  } catch {
+    return {};
+  }
 }

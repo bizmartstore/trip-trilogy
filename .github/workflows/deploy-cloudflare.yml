@@ -28,6 +28,36 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: echo "${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}" | npx wrangler secret put GOOGLE_OAUTH_CLIENT_ID --config .output/server/wrangler.json
         continue-on-error: true
+      - name: Sync OneSignal REST API key
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: echo "${{ secrets.ONESIGNAL_REST_API_KEY }}" | npx wrangler secret put ONESIGNAL_REST_API_KEY --config .output/server/wrangler.json
+        continue-on-error: true
+      - name: Sync Telegram bot token
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: echo "${{ secrets.TELEGRAM_BOT_TOKEN }}" | npx wrangler secret put TELEGRAM_BOT_TOKEN --config .output/server/wrangler.json
+        continue-on-error: true
+      - name: Sync Telegram chat id
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: echo "${{ secrets.TELEGRAM_CHAT_ID }}" | npx wrangler secret put TELEGRAM_CHAT_ID --config .output/server/wrangler.json
+        continue-on-error: true
+      - name: Sync Telegram approved chat id
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: echo "${{ secrets.TELEGRAM_APPROVED_CHAT_ID }}" | npx wrangler secret put TELEGRAM_APPROVED_CHAT_ID --config .output/server/wrangler.json
+        continue-on-error: true
+      - name: Sync Telegram reminder chat id
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: echo "${{ secrets.TELEGRAM_REMINDER_CHAT_ID }}" | npx wrangler secret put TELEGRAM_REMINDER_CHAT_ID --config .output/server/wrangler.json
+        continue-on-error: true
       - name: Deploy Worker
         uses: cloudflare/wrangler-action@v3
         with:

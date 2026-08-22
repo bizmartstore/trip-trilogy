@@ -23,6 +23,7 @@ import { Route as BookingReferenceRouteImport } from './routes/booking.$referenc
 import { Route as ListingSlugRouteImport } from './routes/listing.$slug'
 import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
 import { Route as ApiAuthOauthRouteImport } from './routes/api/auth/oauth'
+import { Route as ApiAuthProfileRouteImport } from './routes/api/auth/profile'
 import { Route as ApiAuthRegisterRouteImport } from './routes/api/auth/register'
 import { Route as ApiAuthSignInRouteImport } from './routes/api/auth/sign-in'
 import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
@@ -99,6 +100,11 @@ const ApiAuthOauthRoute = ApiAuthOauthRouteImport.update({
   path: '/api/auth/oauth',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAuthProfileRoute = ApiAuthProfileRouteImport.update({
+  id: '/api/auth/profile',
+  path: '/api/auth/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiAuthRegisterRoute = ApiAuthRegisterRouteImport.update({
   id: '/api/auth/register',
   path: '/api/auth/register',
@@ -141,6 +147,7 @@ export interface FileRoutesByFullPath {
   '/listing/$slug': typeof ListingSlugRoute
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/oauth': typeof ApiAuthOauthRoute
+  '/api/auth/profile': typeof ApiAuthProfileRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -162,6 +169,7 @@ export interface FileRoutesByTo {
   '/listing/$slug': typeof ListingSlugRoute
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/oauth': typeof ApiAuthOauthRoute
+  '/api/auth/profile': typeof ApiAuthProfileRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -184,6 +192,7 @@ export interface FileRoutesById {
   '/listing/$slug': typeof ListingSlugRoute
   '/api/auth/me': typeof ApiAuthMeRoute
   '/api/auth/oauth': typeof ApiAuthOauthRoute
+  '/api/auth/profile': typeof ApiAuthProfileRoute
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
@@ -207,6 +216,7 @@ export interface FileRouteTypes {
     | '/listing/$slug'
     | '/api/auth/me'
     | '/api/auth/oauth'
+    | '/api/auth/profile'
     | '/api/auth/register'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
@@ -228,6 +238,7 @@ export interface FileRouteTypes {
     | '/listing/$slug'
     | '/api/auth/me'
     | '/api/auth/oauth'
+    | '/api/auth/profile'
     | '/api/auth/register'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
@@ -249,6 +260,7 @@ export interface FileRouteTypes {
     | '/listing/$slug'
     | '/api/auth/me'
     | '/api/auth/oauth'
+    | '/api/auth/profile'
     | '/api/auth/register'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
@@ -271,6 +283,7 @@ export interface RootRouteChildren {
   ListingSlugRoute: typeof ListingSlugRoute
   ApiAuthMeRoute: typeof ApiAuthMeRoute
   ApiAuthOauthRoute: typeof ApiAuthOauthRoute
+  ApiAuthProfileRoute: typeof ApiAuthProfileRoute
   ApiAuthRegisterRoute: typeof ApiAuthRegisterRoute
   ApiAuthSignInRoute: typeof ApiAuthSignInRoute
   ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
@@ -378,6 +391,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthOauthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/auth/profile': {
+      id: '/api/auth/profile'
+      path: '/api/auth/profile'
+      fullPath: '/api/auth/profile'
+      preLoaderRoute: typeof ApiAuthProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/auth/register': {
       id: '/api/auth/register'
       path: '/api/auth/register'
@@ -431,6 +451,7 @@ const rootRouteChildren: RootRouteChildren = {
   ListingSlugRoute: ListingSlugRoute,
   ApiAuthMeRoute: ApiAuthMeRoute,
   ApiAuthOauthRoute: ApiAuthOauthRoute,
+  ApiAuthProfileRoute: ApiAuthProfileRoute,
   ApiAuthRegisterRoute: ApiAuthRegisterRoute,
   ApiAuthSignInRoute: ApiAuthSignInRoute,
   ApiAuthSignOutRoute: ApiAuthSignOutRoute,

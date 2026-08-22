@@ -24,6 +24,20 @@ const KNOWN_ENV_KEYS = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "NEXORA_SESSION_SECRET",
   "GOOGLE_OAUTH_CLIENT_ID",
+  "VITE_GOOGLE_OAUTH_CLIENT_ID",
+  "ONESIGNAL_APP_ID",
+  "VITE_ONESIGNAL_APP_ID",
+  "ONESIGNAL_REST_API_KEY",
+  "ONESIGNAL_API_KEY",
+  "TELEGRAM_BOT_TOKEN",
+  "TELEGRAM_TOKEN",
+  "TELEGRAM_CHAT_ID",
+  "TELEGRAM_GROUP_ID",
+  "TELEGRAM_APPROVED_CHAT_ID",
+  "TELEGRAM_APPROVED_GROUP_ID",
+  "TELEGRAM_REMINDER_CHAT_ID",
+  "TELEGRAM_REMINDERS_CHAT_ID",
+  "NEXORA_WORKER_URL",
 ] as const;
 
 function processEnv(): Record<string, string | undefined> {
@@ -148,7 +162,9 @@ export function syncEnvFromGlobal() {
 
 /** Keep a write alive after the HTTP response on Cloudflare Workers. */
 export function keepAlive(promise: Promise<unknown>) {
-  waitUntilFn?.(promise);
+  if (waitUntilFn) {
+    waitUntilFn(promise);
+  }
   return promise;
 }
 

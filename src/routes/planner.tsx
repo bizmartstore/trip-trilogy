@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "motion/react";
 import { Sparkles, Wallet, Users, CalendarRange, MapPin, Loader2, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { ListingCard } from "@/components/listings/listing-card";
@@ -17,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { destinationOptions, tagOptions } from "@/lib/api";
+import { fetchDestinations, namesFromDestinationCatalog, tagOptions } from "@/lib/api";
 import {
   buildPlan,
   
@@ -47,13 +48,23 @@ export const Route = createFileRoute("/planner")({
 });
 
 function Planner() {
-  const [destination, setDestination] = useState(destinationOptions()[0]);
+  const destinations = useQuery({ queryKey: ["destinations"], queryFn: fetchDestinations });
+  const destinationNames = useMemo(
+    () => namesFromDestinationCatalog(destinations.data),
+    [destinations.data],
+  );
+  const [destination, setDestination] = useState(destinationNames[0] ?? "El Nido");
   const [nights, setNights] = useState(4);
   const [travellers, setTravellers] = useState(2);
   const [budget, setBudget] = useState(60000);
   const [interests, setInterests] = useState<string[]>(["beach", "food"]);
   const [plan, setPlan] = useState<PlanOutput | null>(null);
   const [building, setBuilding] = useState(false);
+
+  useEffect(() => {
+    if (!destinationNames.length) return;
+    if (!destinationNames.includes(destination)) setDestination(destinationNames[0]);
+  }, [destination, destinationNames]);
 
   const build = (override?: Partial<PlanInput>) => {
     const input: PlanInput = {
@@ -129,7 +140,7 @@ function Planner() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-2xl">
-                    {destinationOptions().map((d) => (
+                    {destinationNames.map((d) => (
                       <SelectItem key={d} value={d}>
                         {d}
                       </SelectItem>

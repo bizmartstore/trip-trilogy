@@ -57,12 +57,23 @@ export default {
     try {
       const handler = await getServerEntry();
       const response = await handler.fetch(request, bindings ?? env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      const normalized = await normalizeCatastrophicSsrResponse(response);
+      // Do not set Cross-Origin-Opener-Policy — any COOP value makes Chrome log
+      // "policy would block the window.postMessage call" for Google GSI iframes.
+      const headers = new Headers(normalized.headers);
+      headers.delete("Cross-Origin-Opener-Policy");
+      return new Response(normalized.body, {
+        status: normalized.status,
+        statusText: normalized.statusText,
+        headers,
+      });
     } catch (error) {
       console.error(error);
       return new Response(renderErrorPage(), {
         status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
+        headers: {
+          "content-type": "text/html; charset=utf-8",
+        },
       });
     }
   },

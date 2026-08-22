@@ -9,14 +9,21 @@ import {
   Trash2,
   Upload,
   XCircle,
+  MapPin,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { ContactSettings } from "@/components/admin/contact-settings";
+import { CustomersPanel } from "@/components/admin/customers-panel";
+import { DestinationsPanel } from "@/components/admin/destinations-panel";
 import { LiveBookingFeed } from "@/components/admin/live-booking-feed";
+import { ListingPackagesEditor } from "@/components/admin/listing-packages-editor";
+import { PackagesPanel } from "@/components/admin/packages-panel";
+import { AdminBookingCalendar } from "@/components/admin/admin-booking-calendar";
 import { NotificationBroadcast } from "@/components/admin/notification-broadcast";
 import { RevenuePanel } from "@/components/admin/revenue-panel";
+import { BookingDetailsList } from "@/components/booking/booking-details";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,16 +61,37 @@ import {
   deleteListing,
   fetchAdminBookings,
   fetchAllListingsAdmin,
+  fetchDestinations,
+  fetchPackages,
   inviteAdmin,
   listAdmins,
+  listCustomers,
+  namesFromDestinationCatalog,
   removeAdminInvite,
+  removeCustomer,
   removeListingReview,
+  resetRevenue,
   updateBookingStatus,
   updateListing,
 } from "@/lib/api";
 import { isMainAdminEmail } from "@/lib/constants";
 import { filesToImageText } from "@/lib/image-text";
-import type { Booking, Listing, ListingInput, ListingKind } from "@/lib/types";
+import {
+  bookingDurationLabel,
+  formatDateTime,
+  listingUsesSchedule,
+  PRICING_TYPE_LABELS,
+  resolvePricingType,
+  unitLabelForPricing,
+} from "@/lib/booking-model";
+import {
+  coordsForDestination,
+  isDestinationDefaultPin,
+  osmEmbedUrl,
+  parseMapLocation,
+  sanitizeCoords,
+} from "@/lib/listing-map";
+import type { Booking, BookingStatus, Listing, ListingInput, ListingKind, PricingType } from "@/lib/types";
 import { peso } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({
@@ -96,7 +124,20 @@ const emptyForm = (): ListingInput & { id?: string } => ({
   businessName: "",
   featured: false,
   status: "approved",
+  available: true,
+  unavailableReason: "",
+  durationDays: 1,
+  durationNights: 0,
+  startTime: "08:00",
+  endTime: "18:00",
+  autoEndDate: true,
+  pricingType: "per_person",
+  packageIds: [],
+  packages: [],
   cancellationPolicy: "Free cancellation up to 48 hours before.",
+  showMap: true,
+  mapHidden: false,
+  coords: coordsForDestination("El Nido"),
 });
 
 function Admin() {
@@ -129,9 +170,44 @@ function Admin() {
     queryFn: fetchAllListingsAdmin,
     enabled: !!isAdmin,
   });
+  const destinations = useQuery({
+    queryKey: ["destinations"],
+    queryFn: fetchDestinations,
+    enabled: !!isAdmin,
+  });
+  const packageCatalog = useQuery({
+    queryKey: ["packages"],
+    queryFn: fetchPackages,
+    enabled: !!isAdmin,
+  });
   const admins = useQuery({
     queryKey: ["admin-team", user?.email],
     queryFn: () => listAdmins(user!.email),
+    enabled: !!isAdmin && !!user,
+    staleTime: 0,
+  });
+
+  const adminTeam = useMemo(() => {
+    if (!admins.data?.ok) return [];
+    const active = admins.data.admins.map((a) => ({
+      email: a.email,
+      name: a.name,
+      status: "active" as const,
+    }));
+    const activeEmails = new Set(active.map((a) => a.email));
+    const pending = admins.data.invites
+      .filter((email) => !activeEmails.has(email))
+      .map((email) => ({
+        email,
+        name: email.split("@")[0],
+        status: "pending" as const,
+      }));
+    return [...active, ...pending];
+  }, [admins.data]);
+
+  const customers = useQuery({
+    queryKey: ["admin-customers", user?.email],
+    queryFn: () => listCustomers(user!.email),
     enabled: !!isAdmin && !!user,
   });
 
@@ -142,9 +218,12 @@ function Admin() {
 
   const [review, setReview] = useState<{
     booking: Booking;
-    status: "approved" | "rejected";
+    status: BookingStatus;
   } | null>(null);
   const [reviewNote, setReviewNote] = useState("");
+  const [bookingDetail, setBookingDetail] = useState<Booking | null>(null);
+  const [availabilityTarget, setAvailabilityTarget] = useState<Listing | null>(null);
+  const [unavailableReasonDraft, setUnavailableReasonDraft] = useState("");
 
   const moderate = useMutation({
     mutationFn: ({
@@ -153,7 +232,7 @@ function Admin() {
       note,
     }: {
       id: string;
-      status: "confirmed" | "rejected" | "approved";
+      status: BookingStatus;
       note?: string;
     }) => updateBookingStatus(id, status, { note, actorEmail: user?.email }),
     onSuccess: (result) => {
@@ -185,11 +264,63 @@ function Admin() {
   const [tagsText, setTagsText] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [mapPaste, setMapPaste] = useState("");
+
+  const destinationChoices = useMemo(() => {
+    const names = namesFromDestinationCatalog(destinations.data, listings.data);
+    const typed = form.destination.trim();
+    if (typed && !names.includes(typed)) names.push(typed);
+    return names;
+  }, [destinations.data, listings.data, form.destination]);
+
+  const applyDestination = (destination: string, keepCustomPin = false) => {
+    const match = destinations.data?.find(
+      (d) => d.name.trim().toLowerCase() === destination.trim().toLowerCase(),
+    );
+    const pin = coordsForDestination(destination, destinations.data);
+    setForm((f) => ({
+      ...f,
+      destination,
+      country: match?.country || f.country,
+      coords: keepCustomPin && sanitizeCoords(f.coords) && !isDestinationDefaultPin(f.coords, f.destination, destinations.data)
+        ? f.coords
+        : pin,
+    }));
+    setMapPaste("");
+  };
+
+  const pinToDestination = (destination: string) => applyDestination(destination);
 
   const openCreate = (kind: ListingKind = "tour") => {
-    setForm({ ...emptyForm(), kind });
+    const preferred =
+      destinations.data?.find((d) => d.name === "El Nido") ?? destinations.data?.[0];
+    const isPackage = kind === "package";
+    const activeIds = (packageCatalog.data ?? [])
+      .filter((p) => p.active !== false)
+      .map((p) => p.id);
+    setForm({
+      ...emptyForm(),
+      kind,
+      unit: isPackage
+        ? "per package"
+        : kind === "stay"
+          ? "per night"
+          : kind === "restaurant"
+            ? "per cover"
+            : "per person",
+      pricingType: isPackage ? "per_package" : kind === "stay" ? "per_night" : "per_person",
+      packageIds: isPackage ? activeIds : [],
+      durationDays: isPackage ? undefined : kind === "stay" ? 2 : 1,
+      durationNights: isPackage ? undefined : kind === "stay" ? 1 : 0,
+      price: 0,
+      category: isPackage ? "Travel package" : kind === "stay" ? "Stay" : kind === "restaurant" ? "Dining" : "Experience",
+      destination: preferred?.name ?? "El Nido",
+      country: preferred?.country ?? "Palawan",
+      coords: coordsForDestination(preferred?.name ?? "El Nido", destinations.data),
+    });
     setAmenitiesText("");
     setTagsText("");
+    setMapPaste("");
     setEditorOpen(true);
   };
 
@@ -211,21 +342,47 @@ function Admin() {
       businessName: listing.businessName,
       featured: !!listing.featured,
       status: listing.status,
-      durationDays: listing.durationDays,
+      available: listing.available !== false,
+      unavailableReason: listing.unavailableReason ?? "",
+      durationDays: listing.durationDays ?? 1,
+      durationNights: listing.durationNights,
+      startTime: listing.startTime ?? "08:00",
+      endTime: listing.endTime ?? "18:00",
+      autoEndDate: listing.autoEndDate !== false,
+      pricingType: resolvePricingType(listing),
+      packageIds:
+        listing.packageIds ??
+        (listing.packages?.length ? listing.packages.map((p) => p.id) : []),
+      packages: listing.packages ?? [],
       seatsLeft: listing.seatsLeft,
       discountPct: listing.discountPct,
       cancellationPolicy: listing.cancellationPolicy,
+      showMap: listing.showMap !== false && listing.mapHidden !== true,
+      coords: listing.coords ?? coordsForDestination(listing.destination, destinations.data),
     });
     setAmenitiesText(listing.amenities.join(", "));
     setTagsText(listing.tags.join(", "));
+    setMapPaste("");
     setEditorOpen(true);
   };
 
   const saveListing = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not signed in");
+      const isPackage = form.kind === "package";
+      const selectedTierPrices = (packageCatalog.data ?? [])
+        .filter((p) => (form.packageIds ?? []).includes(p.id) && p.active !== false)
+        .map((p) => p.price)
+        .filter((n) => Number.isFinite(n) && n >= 0);
+      const fromTier = selectedTierPrices.length ? Math.min(...selectedTierPrices) : 0;
       const payload: ListingInput = {
         ...form,
+        pricingType: isPackage ? "per_package" : form.pricingType,
+        unit: isPackage ? "per package" : form.unit,
+        // Package products inherit price/duration from assigned tiers at checkout.
+        price: isPackage ? fromTier : form.price,
+        durationDays: isPackage ? undefined : form.durationDays,
+        durationNights: isPackage ? undefined : form.durationNights,
         amenities: amenitiesText
           .split(",")
           .map((s) => s.trim())
@@ -234,6 +391,16 @@ function Admin() {
           .split(",")
           .map((s) => s.trim())
           .filter(Boolean),
+        discountPct:
+          form.discountPct && form.discountPct > 0 ? Math.min(90, form.discountPct) : undefined,
+        coords: sanitizeCoords(form.coords) ?? coordsForDestination(form.destination, destinations.data),
+        showMap: form.showMap !== false,
+        mapHidden: form.showMap === false,
+        available: form.available !== false,
+        unavailableReason:
+          form.available === false
+            ? form.unavailableReason?.trim() || undefined
+            : undefined,
         images: form.images.length
           ? form.images
           : [
@@ -250,9 +417,12 @@ function Admin() {
       toast.success(form.id ? "Listing updated" : "Listing published");
       setEditorOpen(false);
       void qc.invalidateQueries({ queryKey: ["admin-listings"] });
+      void qc.invalidateQueries({ queryKey: ["destinations"] });
       void qc.invalidateQueries({ queryKey: ["featured"] });
       void qc.invalidateQueries({ queryKey: ["trending"] });
       void qc.invalidateQueries({ queryKey: ["recent"] });
+      void qc.invalidateQueries({ queryKey: ["listing"] });
+      void qc.invalidateQueries({ queryKey: ["search"] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : "Save failed"),
   });
@@ -262,8 +432,39 @@ function Admin() {
     onSuccess: () => {
       toast.success("Listing deleted");
       void qc.invalidateQueries({ queryKey: ["admin-listings"] });
+      void qc.invalidateQueries({ queryKey: ["destinations"] });
+      void qc.invalidateQueries({ queryKey: ["search"] });
     },
     onError: () => toast.error("Could not delete listing"),
+  });
+
+  const setListingAvailability = useMutation({
+    mutationFn: ({
+      id,
+      available,
+      unavailableReason,
+    }: {
+      id: string;
+      available: boolean;
+      unavailableReason?: string;
+    }) =>
+      updateListing(user!.email, id, {
+        available,
+        unavailableReason: available ? undefined : unavailableReason?.trim() || undefined,
+      }),
+    onSuccess: (_data, vars) => {
+      toast.success(vars.available ? "Listing marked available" : "Listing marked unavailable");
+      setAvailabilityTarget(null);
+      setUnavailableReasonDraft("");
+      void qc.invalidateQueries({ queryKey: ["admin-listings"] });
+      void qc.invalidateQueries({ queryKey: ["featured"] });
+      void qc.invalidateQueries({ queryKey: ["trending"] });
+      void qc.invalidateQueries({ queryKey: ["recent"] });
+      void qc.invalidateQueries({ queryKey: ["listing"] });
+      void qc.invalidateQueries({ queryKey: ["search"] });
+    },
+    onError: (err) =>
+      toast.error(err instanceof Error ? err.message : "Could not update availability"),
   });
 
   const invite = useMutation({
@@ -275,21 +476,64 @@ function Admin() {
       }
       toast.success("Admin invite saved — they become admin when they register");
       setInviteEmail("");
+      qc.setQueryData(["admin-team", user?.email], (old: Awaited<ReturnType<typeof listAdmins>> | undefined) => {
+        if (!old?.ok) {
+          return {
+            ok: true as const,
+            invites: result.invites,
+            mainAdmin: isMainAdminEmail(user!.email),
+            admins: [],
+          };
+        }
+        return { ...old, invites: result.invites };
+      });
       void qc.invalidateQueries({ queryKey: ["admin-team"] });
     },
     onError: () => toast.error("Invite failed"),
   });
 
-  const revoke = useMutation({
-    mutationFn: (email: string) => removeAdminInvite(user!.email, email),
-    onSuccess: (result) => {
+  const deleteCustomer = useMutation({
+    mutationFn: (customerEmail: string) => removeCustomer(user!.email, customerEmail),
+    onSuccess: (result, customerEmail) => {
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      toast.success("Invite removed");
+      toast.success("Customer removed");
+      qc.setQueryData(
+        ["admin-customers", user?.email],
+        (old: Awaited<ReturnType<typeof listCustomers>> | undefined) => {
+          if (!old?.ok) return old;
+          return {
+            ...old,
+            customers: old.customers.filter((c) => c.email !== customerEmail),
+          };
+        },
+      );
+      void qc.invalidateQueries({ queryKey: ["admin-customers"] });
+    },
+    onError: () => toast.error("Could not remove customer"),
+  });
+
+  const revoke = useMutation({
+    mutationFn: (email: string) => removeAdminInvite(user!.email, email),
+    onSuccess: (result, email) => {
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(result.wasActiveAdmin ? "Admin removed" : "Invite removed");
+      qc.setQueryData(["admin-team", user?.email], (old: Awaited<ReturnType<typeof listAdmins>> | undefined) => {
+        if (!old?.ok) return old;
+        return {
+          ...old,
+          invites: result.invites,
+          admins: old.admins.filter((a) => a.email !== email),
+        };
+      });
       void qc.invalidateQueries({ queryKey: ["admin-team"] });
     },
+    onError: () => toast.error("Could not remove admin"),
   });
 
   const onUploadImages = async (files: FileList | null) => {
@@ -302,7 +546,7 @@ function Admin() {
         return;
       }
       setForm((f) => ({ ...f, images: [...f.images, ...texts].slice(0, 6) }));
-      toast.success("Images converted to compact text and ready to publish");
+      toast.success("Images uploaded and ready to publish");
     } catch {
       toast.error("Could not process images");
     } finally {
@@ -310,10 +554,23 @@ function Admin() {
     }
   };
 
-  if (!ready || !isAdmin) {
+  if (!ready) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center pt-28">
         <Loader2 className="size-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!user || !isAdmin) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 px-4 pt-28 text-center">
+        <p className="text-sm text-muted-foreground">
+          {!user ? "Sign in with an admin account to open the console." : "This account is not an admin."}
+        </p>
+        <Button asChild variant="hero" className="rounded-full">
+          <Link to={!user ? "/auth" : "/dashboard"}>{!user ? "Sign in" : "Go to dashboard"}</Link>
+        </Button>
       </div>
     );
   }
@@ -339,7 +596,7 @@ function Admin() {
           </Badge>
         </div>
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-3">
+        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
             <p className="text-xs uppercase tracking-widest text-muted-foreground">Pending bookings</p>
             <p className="mt-2 font-display text-3xl font-semibold">{pendingBookings.length}</p>
@@ -349,9 +606,15 @@ function Admin() {
             <p className="mt-2 font-display text-3xl font-semibold">{listings.data?.length ?? 0}</p>
           </div>
           <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">Customers</p>
+            <p className="mt-2 font-display text-3xl font-semibold">
+              {customers.data?.ok ? customers.data.customers.length : "—"}
+            </p>
+          </div>
+          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
             <p className="text-xs uppercase tracking-widest text-muted-foreground">Admins</p>
             <p className="mt-2 font-display text-3xl font-semibold">
-              {admins.data?.ok ? admins.data.admins.length : "—"}
+              {admins.data?.ok ? adminTeam.length : "—"}
             </p>
           </div>
         </div>
@@ -362,8 +625,17 @@ function Admin() {
               <TabsTrigger value="bookings" className="rounded-full">
                 Bookings
               </TabsTrigger>
+              <TabsTrigger value="calendar" className="rounded-full">
+                Calendar
+              </TabsTrigger>
+              <TabsTrigger value="packages" className="rounded-full">
+                Packages
+              </TabsTrigger>
               <TabsTrigger value="content" className="rounded-full">
                 Tours · Stays · Dining
+              </TabsTrigger>
+              <TabsTrigger value="destinations" className="rounded-full">
+                Destinations
               </TabsTrigger>
               <TabsTrigger value="revenue" className="rounded-full">
                 Revenue
@@ -373,6 +645,9 @@ function Admin() {
               </TabsTrigger>
               <TabsTrigger value="messages" className="rounded-full">
                 Messages
+              </TabsTrigger>
+              <TabsTrigger value="customers" className="rounded-full">
+                Customers
               </TabsTrigger>
               <TabsTrigger value="admins" className="rounded-full">
                 Admins
@@ -391,7 +666,11 @@ function Admin() {
                       <TableHead>Reference</TableHead>
                       <TableHead>Guest</TableHead>
                       <TableHead>Listing</TableHead>
-                      <TableHead>Date</TableHead>
+                      <TableHead>Start</TableHead>
+                      <TableHead>End</TableHead>
+                      <TableHead>Duration</TableHead>
+                      <TableHead>Package</TableHead>
+                      <TableHead>Guests</TableHead>
                       <TableHead>Total</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Moderate</TableHead>
@@ -399,7 +678,11 @@ function Admin() {
                   </TableHeader>
                   <TableBody>
                     {bookings.data?.map((b) => (
-                      <TableRow key={b.id}>
+                      <TableRow
+                        key={b.id}
+                        className="cursor-pointer"
+                        onClick={() => setBookingDetail(b)}
+                      >
                         <TableCell className="font-mono text-xs">{b.reference}</TableCell>
                         <TableCell>
                           <div className="min-w-0">
@@ -407,13 +690,48 @@ function Admin() {
                             {b.customerEmail ? (
                               <p className="truncate text-xs text-muted-foreground">{b.customerEmail}</p>
                             ) : null}
+                            {b.customerPhone ? (
+                              <p className="truncate text-xs text-muted-foreground">{b.customerPhone}</p>
+                            ) : null}
+                            {b.guestCheckout ? (
+                              <Badge
+                                variant="outline"
+                                className="mt-1 rounded-full border-primary/40 bg-primary/10 px-2 py-0 text-[10px] font-medium uppercase tracking-wide text-primary"
+                              >
+                                Guest · no account
+                              </Badge>
+                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell className="max-w-[220px] truncate">{b.listingTitle}</TableCell>
-                        <TableCell className="whitespace-nowrap">{b.date}</TableCell>
+                        <TableCell className="whitespace-nowrap text-xs">
+                          {formatDateTime(b.startDate || b.date, b.startTime) || b.date}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-xs">
+                          {formatDateTime(b.endDate || b.startDate || b.date, b.endTime) ||
+                            b.endDate ||
+                            b.date}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-xs">
+                          {bookingDurationLabel(b)}
+                        </TableCell>
+                        <TableCell className="max-w-[120px] truncate text-xs">
+                          {b.packageNameSnapshot || "—"}
+                          {b.pricingType ? (
+                            <p className="text-[11px] text-muted-foreground">
+                              {PRICING_TYPE_LABELS[b.pricingType] ?? b.pricingType.replaceAll("_", " ")}
+                            </p>
+                          ) : null}
+                        </TableCell>
+                        <TableCell>{b.guests}</TableCell>
                         <TableCell>{peso(b.total)}</TableCell>
                         <TableCell>
                           <StatusBadge status={b.status} />
+                          {b.paymentMethod ? (
+                            <p className="mt-1 whitespace-nowrap text-[11px] text-muted-foreground">
+                              via {b.paymentMethod}
+                            </p>
+                          ) : null}
                           {b.statusUpdatedAt ? (
                             <p className="mt-1 whitespace-nowrap text-[11px] text-muted-foreground">
                               {new Date(b.statusUpdatedAt).toLocaleString()}
@@ -432,7 +750,8 @@ function Admin() {
                                 size="sm"
                                 variant="ghost"
                                 className="rounded-full"
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setReviewNote("");
                                   setReview({ booking: b, status: "rejected" });
                                 }}
@@ -443,12 +762,54 @@ function Admin() {
                                 size="sm"
                                 variant="outline"
                                 className="rounded-full"
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   setReviewNote("");
                                   setReview({ booking: b, status: "approved" });
                                 }}
                               >
                                 <CheckCircle2 className="size-4" /> Approve
+                              </Button>
+                            </div>
+                          ) : ["approved", "confirmed", "partial_payment"].includes(b.status) ? (
+                            <div className="flex justify-end gap-2">
+                              {b.status !== "partial_payment" ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="rounded-full"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setReviewNote("");
+                                    setReview({ booking: b, status: "partial_payment" });
+                                  }}
+                                >
+                                  Partial payment
+                                </Button>
+                              ) : null}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="rounded-full"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReviewNote("");
+                                  setReview({ booking: b, status: "completed_payment" });
+                                }}
+                              >
+                                Completed payment
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="rounded-full text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setReviewNote("");
+                                  setReview({ booking: b, status: "rejected" });
+                                }}
+                              >
+                                <XCircle className="size-4" /> Reject
                               </Button>
                             </div>
                           ) : (
@@ -468,6 +829,17 @@ function Admin() {
               </div>
             </TabsContent>
 
+            <TabsContent value="calendar" className="mt-6">
+              <AdminBookingCalendar
+                bookings={bookings.data ?? []}
+                onSelect={(b) => setBookingDetail(b)}
+              />
+            </TabsContent>
+
+            <TabsContent value="packages" className="mt-6">
+              {user ? <PackagesPanel actorEmail={user.email} /> : null}
+            </TabsContent>
+
             <TabsContent value="content" className="mt-6 space-y-4">
               <div className="flex flex-wrap gap-2">
                 <Button className="rounded-full" variant="hero" onClick={() => openCreate("tour")}>
@@ -482,6 +854,13 @@ function Admin() {
                   onClick={() => openCreate("restaurant")}
                 >
                   <Plus className="size-4" /> Add dining
+                </Button>
+                <Button
+                  className="rounded-full"
+                  variant="outline"
+                  onClick={() => openCreate("package")}
+                >
+                  <Plus className="size-4" /> Add package
                 </Button>
               </div>
 
@@ -505,11 +884,34 @@ function Admin() {
                             <p className="truncate font-semibold">{l.title}</p>
                             <p className="truncate text-sm text-muted-foreground">
                               {l.kind} · {l.destination} · {peso(l.price)}
+                              {l.discountPct ? ` · ${l.discountPct}% off` : ""}
                               {l.reviewCount ? ` · ${l.rating} (${l.reviewCount} reviews)` : ""}
+                              {l.showMap === false || l.mapHidden ? " · map hidden" : ""}
+                              {l.available === false
+                                ? ` · unavailable${l.unavailableReason ? `: ${l.unavailableReason}` : ""}`
+                                : " · available"}
                             </p>
                           </div>
                         </div>
-                        <div className="flex shrink-0 gap-2">
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                          <div className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5">
+                            <span className="text-xs text-muted-foreground">
+                              {l.available === false ? "Unavailable" : "Available"}
+                            </span>
+                            <Switch
+                              checked={l.available !== false}
+                              disabled={setListingAvailability.isPending}
+                              onCheckedChange={(checked) => {
+                                if (checked) {
+                                  setListingAvailability.mutate({ id: l.id, available: true });
+                                  return;
+                                }
+                                setAvailabilityTarget(l);
+                                setUnavailableReasonDraft(l.unavailableReason ?? "");
+                              }}
+                              aria-label={`Toggle availability for ${l.title}`}
+                            />
+                          </div>
                           <Button
                             size="sm"
                             variant="outline"
@@ -568,8 +970,25 @@ function Admin() {
                   ))}
             </TabsContent>
 
+            <TabsContent value="destinations" className="mt-6">
+              {user ? <DestinationsPanel actorEmail={user.email} /> : null}
+            </TabsContent>
+
             <TabsContent value="revenue" className="mt-6">
-              <RevenuePanel bookings={bookings.data ?? []} />
+              <RevenuePanel
+                bookings={bookings.data ?? []}
+                isMainAdmin={mainAdmin}
+                onResetRevenue={async (code) => {
+                  const result = await resetRevenue(user!.email, code);
+                  if (result.ok) {
+                    qc.setQueryData<Booking[]>(["admin-bookings"], []);
+                    qc.setQueryData(["booking-feed"], { source: "live", bookings: [] });
+                    void qc.invalidateQueries({ queryKey: ["admin-bookings"] });
+                    void qc.invalidateQueries({ queryKey: ["booking-feed"] });
+                  }
+                  return result;
+                }}
+              />
             </TabsContent>
 
             <TabsContent value="contact" className="mt-6">
@@ -578,6 +997,20 @@ function Admin() {
 
             <TabsContent value="messages" className="mt-6">
               {user ? <NotificationBroadcast actorEmail={user.email} /> : null}
+            </TabsContent>
+
+            <TabsContent value="customers" className="mt-6">
+              <CustomersPanel
+                customers={customers.data?.ok ? customers.data.customers : []}
+                loading={customers.isLoading}
+                isMainAdmin={mainAdmin}
+                removingEmail={deleteCustomer.isPending ? deleteCustomer.variables : null}
+                onRemove={
+                  mainAdmin
+                    ? (customer) => deleteCustomer.mutate(customer.email)
+                    : undefined
+                }
+              />
             </TabsContent>
 
             <TabsContent value="admins" className="mt-6 space-y-6">
@@ -603,52 +1036,66 @@ function Admin() {
                 </form>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  Only the main admin ({`sheethappenswithjaa@gmail.com`}) can invite other admins.
+                  Only the main admin can invite other admins.
                 </p>
               )}
 
               <div>
-                <h3 className="text-sm font-semibold">Pending invites</h3>
+                <h3 className="text-sm font-semibold">Admin team</h3>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Pending invites become active admins once the person registers. Only the main
+                  admin can remove an active admin or a pending invite.
+                </p>
                 <ul className="mt-3 space-y-2">
-                  {admins.data?.ok && admins.data.invites.length
-                    ? admins.data.invites.map((email) => (
-                        <li
-                          key={email}
-                          className="flex items-center justify-between rounded-2xl border border-border px-4 py-3 text-sm"
-                        >
-                          <span>{email}</span>
+                  {adminTeam.length ? (
+                    adminTeam.map((member) => (
+                      <li
+                        key={member.email}
+                        className="flex items-center justify-between gap-3 rounded-2xl border border-border px-4 py-3 text-sm"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{member.name}</p>
+                          <p className="truncate text-muted-foreground">{member.email}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className={
+                              member.status === "active"
+                                ? "rounded-full border-success/30 bg-success/10 text-success"
+                                : "rounded-full border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400"
+                            }
+                          >
+                            {member.status === "active" ? "Active" : "Pending"}
+                          </Badge>
                           {mainAdmin ? (
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="rounded-full"
-                              onClick={() => revoke.mutate(email)}
+                              className="rounded-full text-destructive"
+                              disabled={revoke.isPending}
+                              onClick={() => {
+                                const message =
+                                  member.status === "active"
+                                    ? `Remove ${member.name} (${member.email})? They will no longer be able to sign in.`
+                                    : `Remove the pending invite for ${member.email}?`;
+                                if (confirm(message)) revoke.mutate(member.email);
+                              }}
                             >
+                              {revoke.isPending && revoke.variables === member.email ? (
+                                <Loader2 className="size-4 animate-spin" />
+                              ) : null}
                               Remove
                             </Button>
                           ) : null}
-                        </li>
-                      ))
-                    : (
-                      <p className="text-sm text-muted-foreground">No pending invites.</p>
-                    )}
-                </ul>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold">Active admins</h3>
-                <ul className="mt-3 space-y-2">
-                  {admins.data?.ok
-                    ? admins.data.admins.map((a) => (
-                        <li
-                          key={a.email}
-                          className="rounded-2xl border border-border px-4 py-3 text-sm"
-                        >
-                          <p className="font-medium">{a.name}</p>
-                          <p className="text-muted-foreground">{a.email}</p>
-                        </li>
-                      ))
-                    : null}
+                        </div>
+                      </li>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      No admins yet. Invite someone above to get started.
+                    </p>
+                  )}
                 </ul>
               </div>
             </TabsContent>
@@ -669,8 +1116,7 @@ function Admin() {
               {form.id ? "Edit listing" : "Add listing"}
             </DialogTitle>
             <DialogDescription>
-              Photos are compressed into text data-URLs so they still display as images without
-              storage quota.
+              Upload photos for this listing. Images are compressed automatically before saving.
             </DialogDescription>
           </DialogHeader>
 
@@ -679,7 +1125,36 @@ function Admin() {
               <Label>Kind</Label>
               <Select
                 value={form.kind}
-                onValueChange={(v) => setForm((f) => ({ ...f, kind: v as ListingKind }))}
+                onValueChange={(v) => {
+                  const kind = v as ListingKind;
+                  const isPackage = kind === "package";
+                  const activeIds = (packageCatalog.data ?? [])
+                    .filter((p) => p.active !== false)
+                    .map((p) => p.id);
+                  setForm((f) => ({
+                    ...f,
+                    kind,
+                    unit: isPackage
+                      ? "per package"
+                      : kind === "stay"
+                        ? "per night"
+                        : kind === "restaurant"
+                          ? "per cover"
+                          : f.pricingType === "per_package"
+                            ? "per package"
+                            : f.unit,
+                    pricingType: isPackage
+                      ? "per_package"
+                      : kind === "restaurant"
+                        ? "per_person"
+                        : f.pricingType,
+                    packageIds: isPackage
+                      ? f.packageIds?.length
+                        ? f.packageIds
+                        : activeIds
+                      : f.packageIds,
+                  }));
+                }}
               >
                 <SelectTrigger className="h-11 rounded-xl">
                   <SelectValue />
@@ -688,6 +1163,7 @@ function Admin() {
                   <SelectItem value="tour">Tour</SelectItem>
                   <SelectItem value="stay">Stay</SelectItem>
                   <SelectItem value="restaurant">Dining</SelectItem>
+                  <SelectItem value="package">Package</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -717,10 +1193,28 @@ function Admin() {
             </div>
             <div className="space-y-2">
               <Label>Destination</Label>
+              <Select value={form.destination} onValueChange={pinToDestination}>
+                <SelectTrigger className="h-11 rounded-xl">
+                  <SelectValue placeholder="Choose a destination" />
+                </SelectTrigger>
+                <SelectContent className="rounded-2xl">
+                  {destinationChoices.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Input
                 className="h-11 rounded-xl"
+                placeholder="Or type another place"
                 value={form.destination}
                 onChange={(e) => setForm((f) => ({ ...f, destination: e.target.value }))}
+                onBlur={(e) => {
+                  const next = e.target.value.trim();
+                  if (!next) return;
+                  applyDestination(next, true);
+                }}
               />
             </div>
             <div className="space-y-2">
@@ -731,23 +1225,210 @@ function Admin() {
                 onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
               />
             </div>
-            <div className="space-y-2">
-              <Label>Price (PHP)</Label>
-              <Input
-                type="number"
-                className="h-11 rounded-xl"
-                value={form.price}
-                onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value) }))}
+            {form.kind !== "package" ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Price (PHP)</Label>
+                  <Input
+                    type="number"
+                    className="h-11 rounded-xl"
+                    value={form.price}
+                    onChange={(e) => setForm((f) => ({ ...f, price: Number(e.target.value) }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Discount (% off, optional)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={90}
+                    className="h-11 rounded-xl"
+                    placeholder="No discount"
+                    value={form.discountPct ?? ""}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setForm((f) => ({
+                        ...f,
+                        discountPct: raw === "" ? undefined : Math.min(90, Math.max(0, Number(raw))),
+                      }));
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Unit</Label>
+                  <Input
+                    className="h-11 rounded-xl"
+                    value={form.unit}
+                    onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Pricing type</Label>
+                  <Select
+                    value={form.pricingType ?? "per_person"}
+                    onValueChange={(value) => {
+                      const pricingType = value as PricingType;
+                      const activeIds = (packageCatalog.data ?? [])
+                        .filter((p) => p.active !== false)
+                        .map((p) => p.id);
+                      setForm((f) => ({
+                        ...f,
+                        pricingType,
+                        unit: unitLabelForPricing(pricingType, f.kind),
+                        packageIds:
+                          pricingType === "per_package"
+                            ? f.packageIds?.length
+                              ? f.packageIds
+                              : activeIds
+                            : f.packageIds,
+                      }));
+                    }}
+                  >
+                    <SelectTrigger className="h-11 rounded-xl">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="per_person">Per Person</SelectItem>
+                      {(form.kind === "tour" || form.kind === "stay") && (
+                        <SelectItem value="per_night">Per Night</SelectItem>
+                      )}
+                      {(form.kind === "tour" || form.kind === "stay") && (
+                        <SelectItem value="per_package">Per Package</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2 sm:col-span-2">
+                <Label>Discount (% off, optional)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={90}
+                  className="h-11 rounded-xl"
+                  placeholder="Applied to selected tier price"
+                  value={form.discountPct ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      discountPct: raw === "" ? undefined : Math.min(90, Math.max(0, Number(raw))),
+                    }));
+                  }}
+                />
+                <p className="text-[11px] text-muted-foreground">
+                  Price, days, and nights come from each package tier customers select at checkout.
+                </p>
+              </div>
+            )}
+            {listingUsesSchedule(form.kind) ? (
+              <>
+                {form.kind !== "package" ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Number of days</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        className="h-11 rounded-xl"
+                        value={form.durationDays ?? 1}
+                        onChange={(e) => {
+                          const days = Math.max(1, Number(e.target.value) || 1);
+                          setForm((f) => ({
+                            ...f,
+                            durationDays: days,
+                            durationNights:
+                              f.autoEndDate === false ? f.durationNights : Math.max(0, days - 1),
+                          }));
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Number of nights</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        className="h-11 rounded-xl"
+                        value={form.durationNights ?? Math.max(0, (form.durationDays ?? 1) - 1)}
+                        onChange={(e) =>
+                          setForm((f) => ({
+                            ...f,
+                            durationNights: Math.max(0, Number(e.target.value) || 0),
+                          }))
+                        }
+                      />
+                    </div>
+                  </>
+                ) : null}
+                <div className="space-y-2">
+                  <Label>Start time</Label>
+                  <Input
+                    type="time"
+                    className="h-11 rounded-xl"
+                    value={form.startTime ?? "08:00"}
+                    onChange={(e) => setForm((f) => ({ ...f, startTime: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>End time</Label>
+                  <Input
+                    type="time"
+                    className="h-11 rounded-xl"
+                    value={form.endTime ?? "18:00"}
+                    onChange={(e) => setForm((f) => ({ ...f, endTime: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Capacity (spots)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    className="h-11 rounded-xl"
+                    placeholder="Unlimited"
+                    value={form.seatsLeft ?? ""}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        seatsLeft:
+                          e.target.value === ""
+                            ? undefined
+                            : Math.max(0, Number(e.target.value) || 0),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center justify-between rounded-2xl border border-border px-4 py-3 sm:col-span-2">
+                  <div>
+                    <p className="text-sm font-medium">Auto-calculate end date</p>
+                    <p className="text-xs text-muted-foreground">
+                      {form.kind === "package"
+                        ? "End date is start date plus the selected package tier’s days/nights."
+                        : "End date is start date plus duration (e.g. 3 days / 2 nights)."}
+                    </p>
+                  </div>
+                  <Switch
+                    checked={form.autoEndDate !== false}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, autoEndDate: v }))}
+                  />
+                </div>
+              </>
+            ) : null}
+            {(form.kind === "package" || form.pricingType === "per_package") &&
+            listingUsesSchedule(form.kind) ? (
+              <ListingPackagesEditor
+                catalog={packageCatalog.data ?? []}
+                selectedIds={form.packageIds ?? []}
+                onChange={(packageIds) => setForm((f) => ({ ...f, packageIds }))}
               />
-            </div>
-            <div className="space-y-2">
-              <Label>Unit</Label>
-              <Input
-                className="h-11 rounded-xl"
-                value={form.unit}
-                onChange={(e) => setForm((f) => ({ ...f, unit: e.target.value }))}
-              />
-            </div>
+            ) : null}
+            {form.kind === "package" ? (
+              <p className="rounded-2xl border border-dashed border-border px-4 py-3 text-xs text-muted-foreground sm:col-span-2">
+                Customers choose an available tier (Standard / Premium / Luxury, etc.). Checkout,
+                calendar occupancy, receipts, and notifications use that tier’s price, duration, and
+                inclusions automatically.
+              </p>
+            ) : null}
             <div className="space-y-2 sm:col-span-2">
               <Label>Business name</Label>
               <Input
@@ -776,7 +1457,7 @@ function Admin() {
               <Label>Photos</Label>
               <label className="flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-border px-4 py-8 text-sm text-muted-foreground hover:bg-muted/40">
                 <Upload className="size-4" />
-                {uploading ? "Compressing to text…" : "Upload images (stored as text)"}
+                {uploading ? "Uploading…" : "Upload images"}
                 <input
                   type="file"
                   accept="image/*"
@@ -817,6 +1498,175 @@ function Admin() {
                 onCheckedChange={(v) => setForm((f) => ({ ...f, featured: v }))}
               />
             </div>
+
+            <div className="space-y-3 rounded-2xl border border-border p-4 sm:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium">Available for booking</p>
+                  <p className="text-xs text-muted-foreground">
+                    Turn off when fully booked or temporarily closed. Tourists still see it, but
+                    cannot open or reserve it.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.available !== false}
+                  onCheckedChange={(v) =>
+                    setForm((f) => ({
+                      ...f,
+                      available: v,
+                      unavailableReason: v ? "" : f.unavailableReason,
+                    }))
+                  }
+                  aria-label="Available for booking"
+                />
+              </div>
+              {form.available === false ? (
+                <div className="space-y-1.5">
+                  <Label htmlFor="unavailable-reason">Reason shown to tourists</Label>
+                  <Textarea
+                    id="unavailable-reason"
+                    rows={2}
+                    className="rounded-xl"
+                    placeholder="Fully booked…"
+                    value={form.unavailableReason ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, unavailableReason: e.target.value }))}
+                  />
+                </div>
+              ) : null}
+            </div>
+
+            <div className="space-y-3 rounded-2xl border border-border p-4 sm:col-span-2">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="flex items-center gap-2 text-sm font-medium">
+                    <MapPin className="size-4 text-primary" />
+                    Location map
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Shown on the public listing. Turn this off to hide the map, or set an exact pin
+                    when photos and place change.
+                  </p>
+                </div>
+                <Switch
+                  checked={form.showMap !== false}
+                  onCheckedChange={(v) => setForm((f) => ({ ...f, showMap: v, mapHidden: !v }))}
+                  aria-label="Show location map on the public listing"
+                />
+              </div>
+
+              {form.showMap !== false ? (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label>Latitude</Label>
+                      <Input
+                        type="number"
+                        step="any"
+                        className="h-11 rounded-xl"
+                        value={form.coords?.lat ?? ""}
+                        onChange={(e) => {
+                          const lat = Number(e.target.value);
+                          setForm((f) => ({
+                            ...f,
+                            coords: {
+                              lat: Number.isFinite(lat) ? lat : 0,
+                              lng: f.coords?.lng ?? 0,
+                            },
+                          }));
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Longitude</Label>
+                      <Input
+                        type="number"
+                        step="any"
+                        className="h-11 rounded-xl"
+                        value={form.coords?.lng ?? ""}
+                        onChange={(e) => {
+                          const lng = Number(e.target.value);
+                          setForm((f) => ({
+                            ...f,
+                            coords: {
+                              lat: f.coords?.lat ?? 0,
+                              lng: Number.isFinite(lng) ? lng : 0,
+                            },
+                          }));
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Paste a map link or coordinates</Label>
+                    <Input
+                      className="h-11 rounded-xl"
+                      placeholder="Google Maps / OpenStreetMap link, or 11.1949, 119.4013"
+                      value={mapPaste}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setMapPaste(value);
+                        const parsed = parseMapLocation(value);
+                        if (parsed) setForm((f) => ({ ...f, coords: parsed }));
+                      }}
+                    />
+                    {mapPaste && !parseMapLocation(mapPaste) ? (
+                      <p className="text-xs text-muted-foreground">
+                        Could not read a pin from that link. Try coordinates like 11.1949, 119.4013.
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() => {
+                        pinToDestination(form.destination);
+                        toast.success(`Pinned to ${form.destination || "Palawan"}`);
+                      }}
+                    >
+                      Reset pin to {form.destination || "destination"}
+                    </Button>
+                    {sanitizeCoords(form.coords) ? (
+                      <Button type="button" variant="ghost" className="rounded-full" asChild>
+                        <a
+                          href={`https://www.google.com/maps?q=${form.coords!.lat},${form.coords!.lng}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Open in Google Maps
+                        </a>
+                      </Button>
+                    ) : null}
+                  </div>
+                  {isDestinationDefaultPin(form.coords, form.destination, destinations.data) ? (
+                    <p className="text-xs text-muted-foreground">
+                      Currently using the {form.destination} town pin. Paste a map link for the exact
+                      stay, restaurant or meeting point.
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Custom pin saved with this listing. Changing destination will move it unless you
+                      paste a new map link.
+                    </p>
+                  )}
+                  {sanitizeCoords(form.coords) ? (
+                    <div className="overflow-hidden rounded-2xl border border-border">
+                      <iframe
+                        key={`${form.coords?.lat},${form.coords?.lng}`}
+                        title="Map preview"
+                        className="h-48 w-full"
+                        src={osmEmbedUrl(sanitizeCoords(form.coords)!)}
+                      />
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  The location map is hidden on the public listing page.
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="mt-4 flex justify-end gap-2">
@@ -839,25 +1689,36 @@ function Admin() {
         <DialogContent className="rounded-3xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-display text-xl">
-              {review?.status === "approved" ? "Approve reservation" : "Reject reservation"}
+              {review
+                ? review.status === "approved"
+                  ? "Approve reservation"
+                  : review.status === "partial_payment"
+                    ? "Mark partial payment received"
+                    : review.status === "completed_payment"
+                      ? "Mark payment completed"
+                      : "Reject reservation"
+                : ""}
             </DialogTitle>
             <DialogDescription>
               {review
                 ? `${review.booking.reference} · ${review.booking.customer} · ${peso(review.booking.total)}`
                 : ""}
+              {review && (review.status === "partial_payment" || review.status === "completed_payment") ? (
+                <span className="mt-1 block">
+                  {review.status === "partial_payment"
+                    ? "The tourist has settled part of the total. They still owe the remaining balance."
+                    : "Confirm that the full amount has been received. This adds the reservation to revenue."}
+                </span>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
 
           {review ? (
             <div className="space-y-4">
               <div className="rounded-2xl border border-border bg-secondary/30 p-4 text-sm">
-                <p className="font-medium">{review.booking.listingTitle}</p>
-                <p className="text-xs text-muted-foreground">
-                  {review.booking.date} · {review.booking.guests} guest
-                  {review.booking.guests === 1 ? "" : "s"}
-                </p>
+                <BookingDetailsList booking={review.booking} compact />
                 {review.booking.customerPhone ? (
-                  <p className="mt-1 text-xs text-muted-foreground">
+                  <p className="mt-2 text-xs text-muted-foreground">
                     Contact: {review.booking.customerPhone}
                     {review.booking.notifyPreference
                       ? ` · prefers ${review.booking.notifyPreference}`
@@ -876,13 +1737,18 @@ function Admin() {
                   placeholder={
                     review.status === "approved"
                       ? "Confirmed by phone, pickup 6:30 AM…"
-                      : "Fully booked on that date…"
+                      : review.status === "partial_payment" || review.status === "completed_payment"
+                        ? "Paid in cash at the office…"
+                        : "Fully booked on that date…"
                   }
                   value={reviewNote}
                   onChange={(e) => setReviewNote(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Saved with a timestamp in Supabase and shown on the traveller's dashboard.
+                  Saved with a timestamp and shown on the traveller&apos;s dashboard.
+                  {review.status === "rejected"
+                    ? " Also sent to the admin Telegram group."
+                    : ""}
                 </p>
               </div>
               <div className="flex justify-end gap-2">
@@ -890,7 +1756,7 @@ function Admin() {
                   Cancel
                 </Button>
                 <Button
-                  variant={review.status === "approved" ? "hero" : "destructive"}
+                  variant={review.status === "rejected" ? "destructive" : "hero"}
                   className="rounded-full"
                   disabled={moderate.isPending}
                   onClick={() =>
@@ -905,11 +1771,148 @@ function Admin() {
                     <Loader2 className="size-4 animate-spin" />
                   ) : review.status === "approved" ? (
                     "Approve booking"
+                  ) : review.status === "partial_payment" ? (
+                    "Partial payment received"
+                  ) : review.status === "completed_payment" ? (
+                    "Payment completed"
                   ) : (
                     "Reject booking"
                   )}
                 </Button>
               </div>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!availabilityTarget}
+        onOpenChange={(v) => {
+          if (!v) {
+            setAvailabilityTarget(null);
+            setUnavailableReasonDraft("");
+          }
+        }}
+      >
+        <DialogContent className="rounded-3xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Mark unavailable</DialogTitle>
+            <DialogDescription>
+              {availabilityTarget
+                ? `${availabilityTarget.title} will stay visible, but tourists cannot open or book it.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="availability-reason">Reason (shown on homepage)</Label>
+              <Textarea
+                id="availability-reason"
+                rows={3}
+                className="rounded-xl"
+                placeholder="Fully booked…"
+                value={unavailableReasonDraft}
+                onChange={(e) => setUnavailableReasonDraft(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                className="rounded-full"
+                onClick={() => {
+                  setAvailabilityTarget(null);
+                  setUnavailableReasonDraft("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                className="rounded-full"
+                disabled={setListingAvailability.isPending || !availabilityTarget}
+                onClick={() => {
+                  if (!availabilityTarget) return;
+                  setListingAvailability.mutate({
+                    id: availabilityTarget.id,
+                    available: false,
+                    unavailableReason: unavailableReasonDraft,
+                  });
+                }}
+              >
+                {setListingAvailability.isPending ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  "Mark unavailable"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!bookingDetail} onOpenChange={(v) => !v && setBookingDetail(null)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto rounded-3xl sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="font-display text-xl">Booking details</DialogTitle>
+            <DialogDescription>
+              {bookingDetail ? `${bookingDetail.reference} · ${bookingDetail.customer}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {bookingDetail ? (
+            <div className="space-y-4">
+              <BookingDetailsList booking={bookingDetail} />
+              {bookingDetail.status === "pending" ? (
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="outline"
+                    className="rounded-full"
+                    onClick={() => {
+                      setReviewNote("");
+                      setReview({ booking: bookingDetail, status: "rejected" });
+                      setBookingDetail(null);
+                    }}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    variant="hero"
+                    className="rounded-full"
+                    onClick={() => {
+                      setReviewNote("");
+                      setReview({ booking: bookingDetail, status: "approved" });
+                      setBookingDetail(null);
+                    }}
+                  >
+                    Approve
+                  </Button>
+                </div>
+              ) : ["approved", "confirmed", "partial_payment"].includes(bookingDetail.status) ? (
+                <div className="flex justify-end gap-2">
+                  {bookingDetail.status !== "partial_payment" ? (
+                    <Button
+                      variant="outline"
+                      className="rounded-full"
+                      onClick={() => {
+                        setReviewNote("");
+                        setReview({ booking: bookingDetail, status: "partial_payment" });
+                        setBookingDetail(null);
+                      }}
+                    >
+                      Partial payment
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="hero"
+                    className="rounded-full"
+                    onClick={() => {
+                      setReviewNote("");
+                      setReview({ booking: bookingDetail, status: "completed_payment" });
+                      setBookingDetail(null);
+                    }}
+                  >
+                    Completed payment
+                  </Button>
+                </div>
+              ) : null}
             </div>
           ) : null}
         </DialogContent>

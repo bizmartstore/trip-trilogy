@@ -1,12 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { Facebook, Instagram, Mail, MapPin, Phone, Twitter } from "lucide-react";
-import { NEXORA_LOGO_SRC } from "@/lib/brand";
-import { toast } from "sonner";
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NEXORA_LOGO_SRC } from "@/lib/brand";
 import { fetchSettings } from "@/lib/api";
 
 const columns = [
@@ -40,7 +37,6 @@ const columns = [
 ];
 
 export function Footer() {
-  const [email, setEmail] = useState("");
   const settings = useQuery({ queryKey: ["hub-settings"], queryFn: fetchSettings });
   const contact = settings.data;
 
@@ -62,32 +58,9 @@ export function Footer() {
               whole trip planned in a single place.
             </p>
 
-            <form
-              className="mt-7 flex max-w-md gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-                  toast.error("Please enter a valid email address");
-                  return;
-                }
-                toast.success("You're subscribed", {
-                  description: "Weekly escapes land in your inbox every Thursday.",
-                });
-                setEmail("");
-              }}
-            >
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                aria-label="Email address"
-                className="h-11 rounded-full border-deep-foreground/20 bg-deep-foreground/10 text-deep-foreground placeholder:text-deep-foreground/50"
-              />
-              <Button type="submit" variant="sand" className="h-11 shrink-0 rounded-full px-5">
-                Subscribe
-              </Button>
-            </form>
+            <Button asChild variant="sand" className="mt-7 h-11 rounded-full px-6">
+              <Link to="/auth">Sign in</Link>
+            </Button>
 
             <div className="mt-7 space-y-2 text-sm text-deep-foreground/70">
               <p className="flex items-center gap-2">

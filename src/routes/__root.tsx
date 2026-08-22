@@ -11,10 +11,13 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { InstallAppBanner } from "@/components/layout/install-app-banner";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { Toaster } from "@/components/ui/sonner";
 import { useRealtimeSync } from "@/hooks/use-realtime-sync";
+import { PushAuthBridge } from "@/components/auth/push-auth-bridge";
+import { PushSubscribeBanner } from "@/components/auth/push-subscribe-banner";
 
 
 function NotFoundComponent() {
@@ -165,27 +168,24 @@ function RealtimeBridge() {
   return null;
 }
 
-function usePwa() {
-  useEffect(() => {
-    if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
-    void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
-  }, []);
-}
-
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   useNoZoom();
-  usePwa();
+  // Service worker is registered by OneSignal.init (OneSignalSDKWorker.js).
+  // Do not also register /sw.js here — that causes "[WM] No SW registration for postMessage".
 
   return (
     <QueryClientProvider client={queryClient}>
       <RealtimeBridge />
+      <PushAuthBridge />
+      <PushSubscribeBanner />
       <Navbar />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <main className="min-h-screen">
         <Outlet />
       </main>
       <Footer />
+      <InstallAppBanner />
       <Toaster position="top-right" richColors closeButton />
     </QueryClientProvider>
   );

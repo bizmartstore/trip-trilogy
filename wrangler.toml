@@ -2,11 +2,21 @@
 #
 # Required secrets (never commit values here):
 #   wrangler secret put NEXORA_SUPABASE_SERVICE_ROLE_KEY
-#   wrangler secret put GOOGLE_OAUTH_CLIENT_ID   # optional, for Google sign-in
+#   wrangler secret put GOOGLE_OAUTH_CLIENT_ID   # required for Google sign-in (same Web client ID as Supabase Google provider)
+#   wrangler secret put ONESIGNAL_REST_API_KEY   # OneSignal Dashboard → Settings → Keys & IDs → REST API Key
+#   wrangler secret put TELEGRAM_BOT_TOKEN       # BotFather token (admin group alerts)
+#   wrangler secret put TELEGRAM_CHAT_ID         # Main Telegram group (new + rejected)
+#   wrangler secret put TELEGRAM_APPROVED_CHAT_ID # Approved-bookings Telegram group
+#   wrangler secret put TELEGRAM_REMINDER_CHAT_ID # Day-before / day-of reminder group
 #
 # Or add GitHub Actions secrets (recommended — deploy workflow syncs them):
 #   NEXORA_SUPABASE_SERVICE_ROLE_KEY
 #   GOOGLE_OAUTH_CLIENT_ID
+#   ONESIGNAL_REST_API_KEY
+#   TELEGRAM_BOT_TOKEN
+#   TELEGRAM_CHAT_ID
+#   TELEGRAM_APPROVED_CHAT_ID
+#   TELEGRAM_REMINDER_CHAT_ID
 #   CLOUDFLARE_API_TOKEN
 #   CLOUDFLARE_ACCOUNT_ID
 #   NEXORA_WORKER_URL   # e.g. https://trip-trilogy.workers.dev or your custom domain
@@ -25,6 +35,10 @@ binding = "ASSETS"
 NEXORA_SUPABASE_URL = "https://aeynekfhnzjcimskwouw.supabase.co"
 SUPABASE_URL = "https://aeynekfhnzjcimskwouw.supabase.co"
 VITE_SUPABASE_URL = "https://aeynekfhnzjcimskwouw.supabase.co"
+ONESIGNAL_APP_ID = "4efad5e2-6b5d-4691-86e4-618ea8c97493"
+VITE_ONESIGNAL_APP_ID = "4efad5e2-6b5d-4691-86e4-618ea8c97493"
+# Optional public Web client ID (same as Supabase → Auth → Google). Prefer Worker secret above.
+# GOOGLE_OAUTH_CLIENT_ID = "your-id.apps.googleusercontent.com"
 
 # Optional: attach a custom domain (uncomment and set your route)
 # [[routes]]
