@@ -52,6 +52,7 @@ begin
 end $$;
 
 -- 4. Approval workflow metadata on bookings (safe to re-run)
+alter table public.bookings add column if not exists customer_email text;
 alter table public.bookings add column if not exists customer_phone text;
 alter table public.bookings add column if not exists notify_preference text default 'call';
 alter table public.bookings add column if not exists status_updated_at timestamptz;
