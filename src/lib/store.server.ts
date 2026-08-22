@@ -384,6 +384,51 @@ function sortBookingsNewestFirst(bookings: Booking[]) {
   );
 }
 
+/** Timestamp used to decide which copy of a reservation is newer. */
+function bookingFreshness(booking: Booking) {
+  return (
+    Date.parse(booking.statusUpdatedAt ?? booking.createdAt ?? "") ||
+    Date.parse(booking.createdAt ?? "") ||
+    0
+  );
+}
+
+/**
+ * Merge-on-write guard: union reservations/notifications that OTHER worker
+ * isolates persisted while this isolate was working. Cloudflare isolates each
+ * keep an in-memory copy of the hub document and persist the WHOLE document on
+ * every mutation — without this union, a stale isolate silently erases guest
+ * reservations made elsewhere (bookings going missing from the admin console).
+ */
+function mergeRemoteIntoState(state: HubState, remote: Partial<HubState>) {
+  if (Array.isArray(remote.bookings)) {
+    const byId = new Map(state.bookings.map((b) => [b.id, b]));
+    const cut = state.bookingsClearedAt
+      ? new Date(state.bookingsClearedAt).getTime()
+      : 0;
+    for (const raw of remote.bookings) {
+      if (!raw || typeof raw !== "object") continue;
+      const incoming = rowToBooking(raw as unknown as Record<string, unknown>, state.listings);
+      if (!incoming.id) continue;
+      if (cut && bookingFreshness(incoming) <= cut) continue; // respect revenue resets
+      const current = byId.get(incoming.id);
+      if (!current || bookingFreshness(incoming) > bookingFreshness(current)) {
+        byId.set(incoming.id, incoming);
+      }
+    }
+    state.bookings = sanitizeDemoBookings([...byId.values()]);
+  }
+  if (Array.isArray(remote.notifications) && remote.notifications.length) {
+    const seen = new Set(state.notifications.map((n) => n.id));
+    for (const notification of remote.notifications) {
+      if (notification?.id && !seen.has(notification.id)) {
+        state.notifications.push(notification);
+        seen.add(notification.id);
+      }
+    }
+  }
+}
+
 /** Merge hub document bookings with Supabase table rows (table wins on id conflict). */
 async function mergeAllBookings(): Promise<Booking[]> {
   await ensureStore();
@@ -908,6 +953,20 @@ async function hydrateFromRemote() {
 async function persistToRemote() {
   if (!supabaseConfigured()) return;
   const state = getMemory();
+  // Merge-on-write: adopt reservations/notifications written by other isolates
+  // since this one hydrated, then write the union. Prevents a stale worker from
+  // overwriting the shared document and wiping newer guest bookings.
+  try {
+    const doc = await readHubDocument<Partial<HubState>>();
+    if (doc?.data) {
+      mergeRemoteIntoState(state, doc.data);
+      if ((doc.revision ?? 0) >= state.revision) {
+        state.revision = (doc.revision ?? 0) + 1;
+      }
+    }
+  } catch {
+    // Document unreadable — persist local state as-is rather than dropping mutations.
+  }
   await writeHubDocument(state, state.revision);
 }
 
@@ -2017,28 +2076,33 @@ export async function resetRevenueRecords(actorEmail: string, code: string) {
   return { ok: true as const };
 }
 
-/** Traveller dashboard bookings — strictly the reservations submitted with this email. */
+/** Traveller dashboard bookings — every reservation submitted with this email.
+ * Unions the Supabase `bookings` table with hub-document reservations so guest
+ * checkouts are never dropped, whatever source currently holds them. */
 export async function getBookingsForEmail(email: string): Promise<Booking[]> {
   const state = await ensureStore();
   const key = normalizeEmail(email);
+  const merged = new Map<string, Booking>();
+
+  for (const booking of sanitizeDemoBookings(state.bookings)) {
+    if (booking.customerEmail?.toLowerCase() === key) merged.set(booking.id, booking);
+  }
+
   if (supabaseConfigured()) {
     try {
       const rows = await listBookingRowsByEmail(key);
-      if (rows.length) {
-        return bookingsAfterReset(
-          rows.map((row) => rowToBooking(row, state.listings)),
-          state.bookingsClearedAt,
-        );
+      for (const row of rows) {
+        const booking = rowToBooking(row, state.listings);
+        if (booking.customerEmail?.toLowerCase() !== key) continue;
+        merged.set(booking.id, booking); // table row wins on id conflict
       }
     } catch {
-      // fall through
+      // Bookings table unavailable — hub-document rows above still serve the dashboard.
     }
   }
-  return bookingsAfterReset(
-    sanitizeDemoBookings(state.bookings).filter(
-      (b) => b.customerEmail?.toLowerCase() === key,
-    ),
-    state.bookingsClearedAt,
+
+  return sortBookingsNewestFirst(
+    bookingsAfterReset(Array.from(merged.values()), state.bookingsClearedAt),
   );
 }
 

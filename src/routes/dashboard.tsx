@@ -135,6 +135,9 @@ function Dashboard() {
     queryKey: ["bookings", user?.email],
     queryFn: () => fetchBookingsForEmail(user!.email),
     enabled: !!user && user.role !== "admin",
+    // Keep My Trips in step with admin approve/reject without a manual reload.
+    refetchInterval: 5000,
+    refetchIntervalInBackground: true,
   });
 
   const favorites = useQuery({
@@ -147,6 +150,7 @@ function Dashboard() {
     queryKey: ["notifications", user?.email],
     queryFn: () => fetchNotifications(user!.email),
     enabled: !!user && user.role !== "admin",
+    refetchInterval: 8000,
   });
 
   const markRead = useMutation({

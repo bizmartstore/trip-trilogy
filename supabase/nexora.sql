@@ -90,6 +90,9 @@ update public.bookings
 set customer_email = lower(trim(customer_email))
 where customer_email is not null and customer_email <> lower(trim(customer_email));
 
+-- 4f. Fast email lookups for My Trips (guest booking → registered account linking).
+create index if not exists bookings_customer_email_idx on public.bookings (customer_email);
+
 do $$
 declare
   has_booking_date boolean;
