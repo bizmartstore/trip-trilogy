@@ -77,8 +77,32 @@ export async function writeHubDocument(data: unknown, revision: number) {
   });
 }
 
+/**
+ * Cached capability probe: some projects still have the legacy `bookings`
+ * table (owner_id/user_id/booking_date, no `customer`), where every mirror
+ * write fails. Detect it once so reservations are not re-attempted (and
+ * error-logged) on every admin poll — the hub document remains the source
+ * of truth until `supabase/bookings-repair.sql` is applied.
+ */
+let bookingsTableUsable: boolean | null = null;
+
+export async function bookingsTableSupported(): Promise<boolean> {
+  if (bookingsTableUsable !== null) return bookingsTableUsable;
+  try {
+    await rest("bookings?select=customer,listing_title,kind&limit=1");
+    bookingsTableUsable = true;
+  } catch {
+    bookingsTableUsable = false;
+    console.warn(
+      "[bookings] Supabase `bookings` table is missing app columns — run supabase/bookings-repair.sql. Reservations still persist in hub_state.",
+    );
+  }
+  return bookingsTableUsable;
+}
+
 /** Mirror a booking into a real table so it is visible/queryable in Supabase. */
 export async function upsertBookingRow(row: Record<string, unknown>) {
+  if (!(await bookingsTableSupported())) return;
   await rest("bookings?on_conflict=id", {
     method: "POST",
     headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
