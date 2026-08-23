@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { ListingCard } from "@/components/listings/listing-card";
 import { ReviewForm } from "@/components/listings/review-form";
 import { BookingDialog } from "@/components/booking/booking-dialog";
+import { PackageOverview } from "@/components/booking/package-overview";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -283,6 +284,20 @@ function ListingDetail() {
               </TabsList>
 
               <TabsContent value="details" className="mt-8 space-y-10">
+                {needsPackage && packages.length ? (
+                  <div>
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <h2 className="text-xl font-semibold">Package options</h2>
+                      <p className="text-sm text-muted-foreground">
+                        Choose your preferred tier when you reserve.
+                      </p>
+                    </div>
+                    <div className="mt-5">
+                      <PackageOverview packages={packages} discountPct={listing.discountPct} />
+                    </div>
+                  </div>
+                ) : null}
+
                 {listing.itinerary?.length ? (
                   <div>
                     <h2 className="text-xl font-semibold">Itinerary</h2>
@@ -501,7 +516,7 @@ function ListingDetail() {
               <p className="mt-1 text-xs text-muted-foreground">
                 {needsPackage
                   ? packages.length
-                    ? `${packages.length} package tier${packages.length === 1 ? "" : "s"} · choose on Reserve`
+                    ? `${packages.length} package tier${packages.length === 1 ? "" : "s"} · preview in Details`
                     : "Package tiers open when you reserve"
                   : PRICING_TYPE_LABELS[pricingType]}
                 {!needsPackage && durationLabel ? ` · ${durationLabel}` : ""}
