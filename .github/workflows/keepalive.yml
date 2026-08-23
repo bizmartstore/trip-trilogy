@@ -8,17 +8,33 @@ on:
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 8
     steps:
       - name: Ping Cloudflare Worker keepalive
         env:
           NEXORA_WORKER_URL: ${{ secrets.NEXORA_WORKER_URL }}
         run: |
           URL="${NEXORA_WORKER_URL:-https://trip-trilogy.sheethappenswithjaa.workers.dev}"
-          echo "Pinging $URL/api/public/keepalive"
-          # Tolerate brief deploy windows / cold-start blips: retry transient
-          # and HTTP errors several times before marking the run as failed.
-          curl --fail --show-error --silent \
-            --retry 4 --retry-delay 10 --retry-all-errors \
-            --connect-timeout 15 --max-time 90 \
-            "$URL/api/public/keepalive"
+          ENDPOINT="$URL/api/public/keepalive"
+          echo "Pinging $ENDPOINT"
+          # The keepalive endpoint always answers HTTP 200 once reachable, so the
+          # only realistic failure is a short-lived GitHub-runner -> Cloudflare
+          # egress blip or a deploy-propagation 503. Retry for up to ~5 minutes
+          # so those transient gaps recover *inside this run* instead of emailing
+          # a false "failed" for a healthy service.
+          deadline=$((SECONDS + 300))
+          attempt=0
+          while :; do
+            attempt=$((attempt + 1))
+            if curl --fail --show-error --silent \
+              --connect-timeout 15 --max-time 60 "$ENDPOINT"; then
+              echo "keepalive OK (attempt $attempt)"
+              exit 0
+            fi
+            echo "keepalive attempt $attempt failed; retrying in 15s..."
+            if (( SECONDS >= deadline )); then
+              echo "keepalive still unreachable after $attempt attempts over ~5m" >&2
+              exit 1
+            fi
+            sleep 15
+          done
