@@ -400,7 +400,11 @@ function bookingFreshness(booking: Booking) {
  * every mutation — without this union, a stale isolate silently erases guest
  * reservations made elsewhere (bookings going missing from the admin console).
  */
-function mergeRemoteIntoState(state: HubState, remote: Partial<HubState>) {
+function mergeRemoteIntoState(
+  state: HubState,
+  remote: Partial<HubState>,
+  remoteRevision = 0,
+) {
   if (Array.isArray(remote.bookings)) {
     const byId = new Map(state.bookings.map((b) => [b.id, b]));
     const cut = state.bookingsClearedAt
@@ -426,6 +430,15 @@ function mergeRemoteIntoState(state: HubState, remote: Partial<HubState>) {
         seen.add(notification.id);
       }
     }
+  }
+  // Adopt admin-managed settings that ANOTHER isolate persisted after our last
+  // sync. state.revision was already incremented for our pending write, so
+  // "remoteRevision > state.revision - 1" means someone else wrote since we
+  // last synced. Without this, a stale isolate rewrites the whole hub document
+  // and silently reverts admin edits (e.g. contact details "resetting"
+  // themselves back to the defaults in the footer).
+  if (remote.settings && remoteRevision > state.revision - 1) {
+    state.settings = { ...defaultSettings, ...remote.settings };
   }
 }
 
@@ -970,7 +983,7 @@ async function persistToRemote() {
   try {
     const doc = await readHubDocument<Partial<HubState>>();
     if (doc?.data) {
-      mergeRemoteIntoState(state, doc.data);
+      mergeRemoteIntoState(state, doc.data, doc.revision ?? 0);
       if ((doc.revision ?? 0) >= state.revision) {
         state.revision = (doc.revision ?? 0) + 1;
       }
@@ -981,8 +994,20 @@ async function persistToRemote() {
   await writeHubDocument(state, state.revision);
 }
 
+/** Re-hydrate from the hub document at most this often (per isolate). */
+const HYDRATE_TTL_MS = 30_000;
+let lastHydratedAt = 0;
+
 export async function ensureStore(): Promise<HubState> {
-  if (!hydratePromise) hydratePromise = hydrateFromRemote();
+  // Hydrate once on cold start, then refresh periodically. Isolates live a
+  // long time (the keepalive cron keeps them warm), and hydrating only once
+  // meant an isolate could serve pre-edit settings forever after an admin
+  // saved changes on a different isolate.
+  if (!hydratePromise || Date.now() - lastHydratedAt > HYDRATE_TTL_MS) {
+    hydratePromise = hydrateFromRemote().finally(() => {
+      lastHydratedAt = Date.now();
+    });
+  }
   await hydratePromise;
   return getMemory();
 }
@@ -1040,7 +1065,9 @@ export async function getSettings(): Promise<HubSettings> {
 export async function updateSettings(actorEmail: string, patch: Partial<HubSettings>) {
   const state = await assertAdmin(actorEmail);
   state.settings = { ...defaultSettings, ...state.settings, ...patch };
-  bump(state);
+  // Persist before responding so a saved change is durable even if this
+  // isolate freezes right after the response (bump() is fire-and-forget).
+  await bumpAndWait(state);
   return state.settings;
 }
 
