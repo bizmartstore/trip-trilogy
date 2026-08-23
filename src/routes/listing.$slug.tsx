@@ -31,7 +31,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { fetchFavorites, fetchListingBySlug, fetchRelated, toggleFavorite } from "@/lib/api";
+import { fetchFavorites, fetchListingBySlug, fetchRelated, fetchSettings, toggleFavorite } from "@/lib/api";
 import {
   activePackages,
   discountedUnitPrice,
@@ -155,6 +155,10 @@ function ListingDetail() {
     queryFn: () => fetchFavorites(user!.email),
     enabled: !!user,
   });
+  const settingsQuery = useQuery({ queryKey: ["hub-settings"], queryFn: fetchSettings });
+  // Admin-editable global cancellation/refund notice wins over the per-listing text.
+  const cancellationNotice =
+    settingsQuery.data?.cancellationNotice?.trim() || listing.cancellationPolicy;
   const saved = favorites.data?.some((l) => l.id === listing.id) ?? false;
 
   const save = useMutation({
@@ -482,7 +486,7 @@ function ListingDetail() {
                 </Accordion>
                 <p className="mt-6 rounded-2xl bg-secondary/60 p-5 text-sm text-muted-foreground">
                   <strong className="text-foreground">Cancellation policy: </strong>
-                  {listing.cancellationPolicy}
+                  {cancellationNotice}
                 </p>
               </TabsContent>
             </Tabs>
@@ -663,7 +667,7 @@ function ListingDetail() {
               </Button>
               <p className="mt-3 text-center text-xs text-muted-foreground">
                 {available
-                  ? listing.cancellationPolicy
+                  ? cancellationNotice
                   : listing.unavailableReason?.trim() ||
                     "This listing is not accepting reservations."}
               </p>

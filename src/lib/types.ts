@@ -244,6 +244,20 @@ export interface HubSettings {
   socialInstagram?: string;
   socialTwitter?: string;
   socialFacebook?: string;
+  /**
+   * Admin-editable policy pages (Admin → Policies). Empty string means the
+   * built-in default content is shown on the public page.
+   */
+  policyTerms?: string;
+  policyPrivacy?: string;
+  policyCancellation?: string;
+  policyHelp?: string;
+  /**
+   * Short cancellation / refund notice shown wherever reservation terms are
+   * displayed (listing sidebar, booking dialog, listing FAQ). Falls back to
+   * the listing's own cancellationPolicy when blank.
+   */
+  cancellationNotice?: string;
 }
 
 

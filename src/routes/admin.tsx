@@ -15,6 +15,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { ContactSettings } from "@/components/admin/contact-settings";
+import { PolicyContentSettings } from "@/components/admin/policy-content-settings";
 import { CustomersPanel } from "@/components/admin/customers-panel";
 import { DestinationsPanel } from "@/components/admin/destinations-panel";
 import { LiveBookingFeed } from "@/components/admin/live-booking-feed";
@@ -643,6 +644,9 @@ function Admin() {
               <TabsTrigger value="contact" className="rounded-full">
                 Contact details
               </TabsTrigger>
+              <TabsTrigger value="policies" className="rounded-full">
+                Policies
+              </TabsTrigger>
               <TabsTrigger value="messages" className="rounded-full">
                 Messages
               </TabsTrigger>
@@ -993,6 +997,10 @@ function Admin() {
 
             <TabsContent value="contact" className="mt-6">
               {user ? <ContactSettings actorEmail={user.email} /> : null}
+            </TabsContent>
+
+            <TabsContent value="policies" className="mt-6">
+              {user ? <PolicyContentSettings actorEmail={user.email} /> : null}
             </TabsContent>
 
             <TabsContent value="messages" className="mt-6">

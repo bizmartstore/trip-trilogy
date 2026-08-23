@@ -661,6 +661,11 @@ export const updateSettingsFn = createServerFn({ method: "POST" })
             socialInstagram: z.string().trim().max(300).optional(),
             socialTwitter: z.string().trim().max(300).optional(),
             socialFacebook: z.string().trim().max(300).optional(),
+            policyTerms: z.string().max(20000).optional(),
+            policyPrivacy: z.string().max(20000).optional(),
+            policyCancellation: z.string().max(20000).optional(),
+            policyHelp: z.string().max(20000).optional(),
+            cancellationNotice: z.string().trim().max(600).optional(),
           })
           .partial(),
       })

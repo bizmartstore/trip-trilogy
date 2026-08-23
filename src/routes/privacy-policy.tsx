@@ -1,6 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { PolicyPage } from "@/components/legal/policy-page";
+import { fetchSettings } from "@/lib/api";
 
 const description = "Learn how Nexora collects, uses, protects, and shares personal information for Palawan travel bookings.";
 
@@ -14,7 +16,8 @@ export const Route = createFileRoute("/privacy-policy")({
 });
 
 function PrivacyPolicy() {
-  return <PolicyPage eyebrow="Your information" title="Privacy policy" intro="Nexora uses personal information only to operate the marketplace, process reservations, support travellers, and keep the platform secure." sections={[
+  const { data: settings } = useQuery({ queryKey: ["hub-settings"], queryFn: fetchSettings });
+  return <PolicyPage eyebrow="Your information" title="Privacy policy" intro="Nexora uses personal information only to operate the marketplace, process reservations, support travellers, and keep the platform secure." custom={settings?.policyPrivacy} sections={[
     { title: "Information we collect", paragraphs: ["We may collect your name, email, contact number, account profile, reservation details, communication preferences, reviews, and technical information needed to secure and improve the service."] },
     { title: "How information is used", paragraphs: ["We use information to authenticate accounts, send reservation updates, coordinate with providers, process support requests, prevent abuse, meet legal obligations, and understand platform performance."] },
     { title: "Sharing and retention", paragraphs: ["Relevant reservation details may be shared with the business fulfilling your booking. We do not sell personal information. Records are retained only as long as needed for service, accounting, dispute resolution, security, or legal requirements."] },

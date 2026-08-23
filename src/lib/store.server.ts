@@ -111,6 +111,12 @@ export const defaultSettings: HubSettings = {
   socialInstagram: "",
   socialTwitter: "",
   socialFacebook: "",
+  // Admin-editable policy pages — empty means the built-in defaults render.
+  policyTerms: "",
+  policyPrivacy: "",
+  policyCancellation: "",
+  policyHelp: "",
+  cancellationNotice: "",
 };
 
 const SEED_REVIEW_IDS = new Set(["r1", "r2", "r3"]);

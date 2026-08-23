@@ -1,6 +1,8 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import { PolicyPage } from "@/components/legal/policy-page";
+import { fetchSettings } from "@/lib/api";
 
 const description = "Get help with Nexora reservations, payments, account access, and travel support across Palawan.";
 
@@ -17,7 +19,8 @@ export const Route = createFileRoute("/help-centre")({
 });
 
 function HelpCentre() {
-  return <PolicyPage eyebrow="Traveller support" title="How can we help?" intro="Find quick answers about booking tours, stays, and dining experiences through Nexora." sections={[
+  const { data: settings } = useQuery({ queryKey: ["hub-settings"], queryFn: fetchSettings });
+  return <PolicyPage eyebrow="Traveller support" title="How can we help?" intro="Find quick answers about booking tours, stays, and dining experiences through Nexora." custom={settings?.policyHelp} sections={[
     { title: "Reservations", paragraphs: ["After you submit a reservation, it remains pending until an administrator reviews it. Your dashboard shows its latest status and any admin note."], bullets: ["Pending means your request is awaiting review.", "Approved means the provider has accepted the reservation.", "Rejected means the request could not be accommodated; review the admin note for details."] },
     { title: "Contact and follow-up", paragraphs: ["Nexora administrators maintain the current call, text, email, and office details shown in the footer and on booking confirmations. Use those details to follow up on an urgent reservation."], bullets: ["Include your booking reference when calling or texting.", "Never send passwords or full payment credentials by message."] },
     { title: "Account help", paragraphs: ["Sign in with the same email address used for your reservation to review booking history and notification preferences. If you lose access, contact support using the details in the footer."] },

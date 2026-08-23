@@ -589,7 +589,7 @@ export function BookingDialog({
                   )}
                 </Button>
                 <p className="text-center text-xs text-muted-foreground">
-                  {listing.cancellationPolicy}
+                  {settings.data?.cancellationNotice?.trim() || listing.cancellationPolicy}
                 </p>
               </form>
             </Form>
