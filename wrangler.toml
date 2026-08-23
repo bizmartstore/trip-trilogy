@@ -27,6 +27,11 @@ main = ".output/server/index.mjs"
 compatibility_date = "2026-08-14"
 compatibility_flags = ["nodejs_compat"]
 
+[triggers]
+# Keep the Worker + Supabase warm natively inside Cloudflare, every 10 minutes.
+# Fires the `scheduled` event, handled by server/plugins/keepalive.ts.
+crons = ["*/10 * * * *"]
+
 [assets]
 directory = ".output/public"
 binding = "ASSETS"

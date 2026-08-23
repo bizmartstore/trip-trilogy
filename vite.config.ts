@@ -12,4 +12,9 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Explicitly register the Cloudflare cron keepalive plugin (server/plugins/
+  // auto-scanning is not wired in this TanStack preset).
+  nitro: {
+    plugins: ["server/plugins/keepalive.ts"],
+  },
 });

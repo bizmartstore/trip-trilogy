@@ -1,8 +1,12 @@
 name: Keep Nexora services active
 
+# DISABLED as an automatic scheduler: a native Cloudflare Cron Trigger
+# (`wrangler.toml` → [triggers] crons = "*/10 * * * *") now keeps the Worker
+# and Supabase warm entirely inside Cloudflare, handled by
+# server/plugins/keepalive.ts. This workflow is kept as a manual backstop
+# (Actions → "Run workflow") — it no longer runs on a schedule, so it can't
+# produce false "failed" notification emails for a healthy service.
 on:
-  schedule:
-    - cron: "*/10 * * * *"
   workflow_dispatch:
 
 jobs:
