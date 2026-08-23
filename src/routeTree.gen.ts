@@ -19,6 +19,7 @@ import { Route as HelpCentreRouteImport } from './routes/help-centre'
 import { Route as PlannerRouteImport } from './routes/planner'
 import { Route as PrivacyPolicyRouteImport } from './routes/privacy-policy'
 import { Route as TermsOfServiceRouteImport } from './routes/terms-of-service'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as BookingReferenceRouteImport } from './routes/booking.$reference'
 import { Route as ListingSlugRouteImport } from './routes/listing.$slug'
 import { Route as ApiAuthMeRouteImport } from './routes/api/auth/me'
@@ -78,6 +79,11 @@ const PrivacyPolicyRoute = PrivacyPolicyRouteImport.update({
 const TermsOfServiceRoute = TermsOfServiceRouteImport.update({
   id: '/terms-of-service',
   path: '/terms-of-service',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
   getParentRoute: () => rootRouteImport,
 } as any)
 const BookingReferenceRoute = BookingReferenceRouteImport.update({
@@ -143,6 +149,7 @@ export interface FileRoutesByFullPath {
   '/planner': typeof PlannerRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/api/chat': typeof ApiChatRoute
   '/booking/$reference': typeof BookingReferenceRoute
   '/listing/$slug': typeof ListingSlugRoute
   '/api/auth/me': typeof ApiAuthMeRoute
@@ -165,6 +172,7 @@ export interface FileRoutesByTo {
   '/planner': typeof PlannerRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/api/chat': typeof ApiChatRoute
   '/booking/$reference': typeof BookingReferenceRoute
   '/listing/$slug': typeof ListingSlugRoute
   '/api/auth/me': typeof ApiAuthMeRoute
@@ -188,6 +196,7 @@ export interface FileRoutesById {
   '/planner': typeof PlannerRoute
   '/privacy-policy': typeof PrivacyPolicyRoute
   '/terms-of-service': typeof TermsOfServiceRoute
+  '/api/chat': typeof ApiChatRoute
   '/booking/$reference': typeof BookingReferenceRoute
   '/listing/$slug': typeof ListingSlugRoute
   '/api/auth/me': typeof ApiAuthMeRoute
@@ -212,6 +221,7 @@ export interface FileRouteTypes {
     | '/planner'
     | '/privacy-policy'
     | '/terms-of-service'
+    | '/api/chat'
     | '/booking/$reference'
     | '/listing/$slug'
     | '/api/auth/me'
@@ -234,6 +244,7 @@ export interface FileRouteTypes {
     | '/planner'
     | '/privacy-policy'
     | '/terms-of-service'
+    | '/api/chat'
     | '/booking/$reference'
     | '/listing/$slug'
     | '/api/auth/me'
@@ -256,6 +267,7 @@ export interface FileRouteTypes {
     | '/planner'
     | '/privacy-policy'
     | '/terms-of-service'
+    | '/api/chat'
     | '/booking/$reference'
     | '/listing/$slug'
     | '/api/auth/me'
@@ -279,6 +291,7 @@ export interface RootRouteChildren {
   PlannerRoute: typeof PlannerRoute
   PrivacyPolicyRoute: typeof PrivacyPolicyRoute
   TermsOfServiceRoute: typeof TermsOfServiceRoute
+  ApiChatRoute: typeof ApiChatRoute
   BookingReferenceRoute: typeof BookingReferenceRoute
   ListingSlugRoute: typeof ListingSlugRoute
   ApiAuthMeRoute: typeof ApiAuthMeRoute
@@ -361,6 +374,13 @@ declare module '@tanstack/react-router' {
       path: '/terms-of-service'
       fullPath: '/terms-of-service'
       preLoaderRoute: typeof TermsOfServiceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/booking/$reference': {
@@ -447,6 +467,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlannerRoute: PlannerRoute,
   PrivacyPolicyRoute: PrivacyPolicyRoute,
   TermsOfServiceRoute: TermsOfServiceRoute,
+  ApiChatRoute: ApiChatRoute,
   BookingReferenceRoute: BookingReferenceRoute,
   ListingSlugRoute: ListingSlugRoute,
   ApiAuthMeRoute: ApiAuthMeRoute,
