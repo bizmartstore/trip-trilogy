@@ -272,13 +272,6 @@ export async function findBookingInHubDocument(
   );
 }
 
-/** Keep-alive ping — a tiny read that prevents the project from idling out. */
-export async function pingSupabase() {
-  const started = Date.now();
-  const revision = await readHubRevision();
-  return { ok: true as const, revision, ms: Date.now() - started };
-}
-
 /** Favourites mirrored as real rows (email + listing_id). Service role only. */
 export async function upsertFavoriteRow(email: string, listingId: string) {
   await rest("favorites?on_conflict=email,listing_id", {

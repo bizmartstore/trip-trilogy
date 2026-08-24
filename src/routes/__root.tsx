@@ -18,6 +18,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useRealtimeSync } from "@/hooks/use-realtime-sync";
 import { PushAuthBridge } from "@/components/auth/push-auth-bridge";
 import { PushSubscribeBanner } from "@/components/auth/push-subscribe-banner";
+import { NexoraChatbot } from "@/components/shared/nexora-chatbot";
 
 
 function NotFoundComponent() {
@@ -186,6 +187,7 @@ function RootComponent() {
       </main>
       <Footer />
       <InstallAppBanner />
+      <NexoraChatbot />
       <Toaster position="top-right" richColors closeButton />
     </QueryClientProvider>
   );

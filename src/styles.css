@@ -210,6 +210,121 @@
   --shadow-lift: 0 24px 60px -28px oklch(0 0 0 / 70%);
 }
 
+/*
+ * SUNSET — golden-hour summer. Warm peach sand, coral accents, low glare.
+ */
+.sunset {
+  --background: oklch(0.965 0.032 60);
+  --foreground: oklch(0.33 0.055 45);
+  --card: oklch(0.985 0.02 70);
+  --card-foreground: oklch(0.33 0.055 45);
+  --popover: oklch(0.985 0.02 70);
+  --popover-foreground: oklch(0.33 0.055 45);
+
+  --primary: oklch(0.615 0.16 40);
+  --primary-foreground: oklch(0.985 0.012 75);
+  --secondary: oklch(0.92 0.05 68);
+  --secondary-foreground: oklch(0.35 0.06 42);
+  --muted: oklch(0.93 0.038 66);
+  --muted-foreground: oklch(0.51 0.055 48);
+  --accent: oklch(0.88 0.07 78);
+  --accent-foreground: oklch(0.33 0.055 45);
+
+  --destructive: oklch(0.58 0.19 28);
+  --destructive-foreground: oklch(0.985 0.012 75);
+  --border: oklch(0.87 0.042 64);
+  --input: oklch(0.87 0.042 64);
+  --ring: oklch(0.615 0.16 40);
+
+  --sand: oklch(0.89 0.06 74);
+  --sand-foreground: oklch(0.33 0.055 45);
+  --gold: oklch(0.75 0.13 70);
+  --gold-foreground: oklch(0.25 0.05 40);
+  --deep: oklch(0.35 0.085 22);
+  --deep-foreground: oklch(0.96 0.018 72);
+  --success: oklch(0.62 0.11 150);
+  --success-foreground: oklch(0.985 0.012 75);
+  --warning: oklch(0.79 0.13 80);
+  --warning-foreground: oklch(0.27 0.05 45);
+
+  --chart-1: oklch(0.615 0.16 40);
+  --chart-2: oklch(0.75 0.13 70);
+  --chart-3: oklch(0.66 0.11 25);
+  --chart-4: oklch(0.7 0.1 95);
+  --chart-5: oklch(0.55 0.09 180);
+
+  --sidebar: oklch(0.975 0.026 66);
+  --sidebar-foreground: oklch(0.33 0.055 45);
+  --sidebar-primary: oklch(0.615 0.16 40);
+  --sidebar-primary-foreground: oklch(0.985 0.012 75);
+  --sidebar-accent: oklch(0.93 0.038 66);
+  --sidebar-accent-foreground: oklch(0.33 0.055 45);
+  --sidebar-border: oklch(0.89 0.04 64);
+  --sidebar-ring: oklch(0.615 0.16 40);
+
+  --glass-bg: color-mix(in oklab, var(--card) 62%, transparent);
+  --glass-border: color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+
+/*
+ * OCEAN — calm deep-sea. Dim, desaturated blue-green; easy on the eyes at night.
+ */
+.ocean {
+  --background: oklch(0.215 0.026 228);
+  --foreground: oklch(0.94 0.012 210);
+  --card: oklch(0.255 0.03 226);
+  --card-foreground: oklch(0.94 0.012 210);
+  --popover: oklch(0.255 0.03 226);
+  --popover-foreground: oklch(0.94 0.012 210);
+
+  --primary: oklch(0.77 0.072 200);
+  --primary-foreground: oklch(0.19 0.032 225);
+  --secondary: oklch(0.3 0.033 222);
+  --secondary-foreground: oklch(0.94 0.012 210);
+  --muted: oklch(0.29 0.03 224);
+  --muted-foreground: oklch(0.73 0.024 214);
+  --accent: oklch(0.34 0.036 218);
+  --accent-foreground: oklch(0.94 0.014 205);
+
+  --destructive: oklch(0.65 0.17 25);
+  --destructive-foreground: oklch(0.98 0.008 90);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.77 0.072 200);
+
+  --sand: oklch(0.84 0.035 200);
+  --sand-foreground: oklch(0.21 0.03 225);
+  --gold: oklch(0.8 0.105 190);
+  --gold-foreground: oklch(0.19 0.032 225);
+  --deep: oklch(0.155 0.028 230);
+  --deep-foreground: oklch(0.94 0.012 210);
+  --success: oklch(0.71 0.11 165);
+  --success-foreground: oklch(0.18 0.03 220);
+  --warning: oklch(0.81 0.115 195);
+  --warning-foreground: oklch(0.19 0.032 225);
+
+  --chart-1: oklch(0.77 0.072 200);
+  --chart-2: oklch(0.8 0.105 190);
+  --chart-3: oklch(0.7 0.09 235);
+  --chart-4: oklch(0.72 0.1 160);
+  --chart-5: oklch(0.68 0.12 30);
+
+  --sidebar: oklch(0.245 0.029 226);
+  --sidebar-foreground: oklch(0.94 0.012 210);
+  --sidebar-primary: oklch(0.77 0.072 200);
+  --sidebar-primary-foreground: oklch(0.19 0.032 225);
+  --sidebar-accent: oklch(0.3 0.033 222);
+  --sidebar-accent-foreground: oklch(0.94 0.012 210);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.77 0.072 200);
+
+  --glass-bg: color-mix(in oklab, var(--card) 58%, transparent);
+  --glass-border: color-mix(in oklab, var(--foreground) 14%, transparent);
+
+  --shadow-soft: 0 1px 2px oklch(0 0 0 / 40%), 0 8px 24px -12px oklch(0 0 0 / 55%);
+  --shadow-lift: 0 24px 60px -28px oklch(0 0 0 / 70%);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -288,6 +403,14 @@
   padding-inline: 1.25rem;
   @media (min-width: 1024px) {
     padding-inline: 2rem;
+  }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
   }
 }
 

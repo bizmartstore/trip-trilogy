@@ -28,8 +28,8 @@ compatibility_date = "2026-08-14"
 compatibility_flags = ["nodejs_compat"]
 
 [triggers]
-# Keep the Worker + Supabase warm natively inside Cloudflare, every 10 minutes.
-# Fires the `scheduled` event, handled by server/plugins/keepalive.ts.
+# Native Cloudflare Cron Trigger, every 10 minutes: wakes the Worker to drain
+# pending admin pushes and booking reminders (server/plugins/maintenance.ts).
 crons = ["*/10 * * * *"]
 
 [assets]

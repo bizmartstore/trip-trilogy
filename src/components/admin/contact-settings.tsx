@@ -144,6 +144,30 @@ export function ContactSettings({ actorEmail }: { actorEmail: string }) {
         </div>
       </div>
 
+      <div className="rounded-2xl border border-border bg-secondary/30 p-5">
+        <h3 className="font-display text-sm font-semibold uppercase tracking-widest text-muted-foreground">
+          NEXI chat assistant
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Free AI questions each visitor gets per day. Quick FAQ answers are always free and
+          unlimited. Set 0 to use the default (10).
+        </p>
+        <div className="mt-4 sm:max-w-48">
+          <Field label="Daily AI message limit">
+            <Input
+              className="h-11 rounded-xl"
+              type="number"
+              min={0}
+              max={200}
+              value={form.chatDailyLimit ?? 0}
+              onChange={(e) =>
+                setForm({ ...form, chatDailyLimit: Math.max(0, Number(e.target.value) || 0) })
+              }
+            />
+          </Field>
+        </div>
+      </div>
+
       <Button
         variant="hero"
         className="rounded-full"

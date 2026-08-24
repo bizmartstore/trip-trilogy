@@ -64,10 +64,10 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config .output/server/wrangler.json
-      - name: Health check (keepalive)
+      - name: Health check
         continue-on-error: true
         run: |
           URL="${{ secrets.NEXORA_WORKER_URL }}"
           if [ -z "$URL" ]; then URL="https://trip-trilogy.sheethappenswithjaa.workers.dev"; fi
-          echo "Checking $URL/api/public/keepalive"
-          curl --fail --show-error --silent --retry 3 --retry-delay 5 "$URL/api/public/keepalive"
+          echo "Checking $URL/api/public/health"
+          curl --fail --show-error --silent --retry 3 --retry-delay 5 "$URL/api/public/health"

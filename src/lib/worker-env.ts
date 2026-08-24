@@ -38,6 +38,9 @@ const KNOWN_ENV_KEYS = [
   "TELEGRAM_REMINDER_CHAT_ID",
   "TELEGRAM_REMINDERS_CHAT_ID",
   "NEXORA_WORKER_URL",
+  "GEMINI_API_KEY",
+  "GOOGLE_AI_API_KEY",
+  "GEMINI_MODEL",
 ] as const;
 
 function processEnv(): Record<string, string | undefined> {

@@ -1,6 +1,6 @@
 /**
  * OneSignal REST helpers (server-only).
- * Booking/status/broadcast pushes must never throw — failures are logged and retried via keepalive.
+ * Booking/status/broadcast pushes must never throw — failures are logged and retried by the cron job.
  */
 import { ONESIGNAL_APP_ID } from "@/lib/onesignal";
 import { firstEnv, keepAlive, syncEnvFromGlobal } from "@/lib/worker-env";

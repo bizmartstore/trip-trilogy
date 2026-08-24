@@ -1,15 +1,27 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  CalendarDays,
   CheckCircle2,
+  Coins,
+  Compass,
+  CreditCard,
   Loader2,
+  type LucideIcon,
+  Mail,
+  MapPin,
+  MessageSquare,
+  Package,
   Pencil,
+  Phone,
   Plus,
+  ScrollText,
   ShieldCheck,
+  Star,
   Trash2,
   Upload,
+  Users,
   XCircle,
-  MapPin,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -24,6 +36,7 @@ import { PackagesPanel } from "@/components/admin/packages-panel";
 import { AdminBookingCalendar } from "@/components/admin/admin-booking-calendar";
 import { NotificationBroadcast } from "@/components/admin/notification-broadcast";
 import { RevenuePanel } from "@/components/admin/revenue-panel";
+import { TestimonialsPanel } from "@/components/admin/testimonials-panel";
 import { BookingDetailsList } from "@/components/booking/booking-details";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { Button } from "@/components/ui/button";
@@ -92,7 +105,14 @@ import {
   parseMapLocation,
   sanitizeCoords,
 } from "@/lib/listing-map";
-import type { Booking, BookingStatus, Listing, ListingInput, ListingKind, PricingType } from "@/lib/types";
+import type {
+  Booking,
+  BookingStatus,
+  Listing,
+  ListingInput,
+  ListingKind,
+  PricingType,
+} from "@/lib/types";
 import { peso } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin")({
@@ -227,15 +247,8 @@ function Admin() {
   const [unavailableReasonDraft, setUnavailableReasonDraft] = useState("");
 
   const moderate = useMutation({
-    mutationFn: ({
-      id,
-      status,
-      note,
-    }: {
-      id: string;
-      status: BookingStatus;
-      note?: string;
-    }) => updateBookingStatus(id, status, { note, actorEmail: user?.email }),
+    mutationFn: ({ id, status, note }: { id: string; status: BookingStatus; note?: string }) =>
+      updateBookingStatus(id, status, { note, actorEmail: user?.email }),
     onSuccess: (result) => {
       qc.setQueryData<Booking[]>(["admin-bookings"], (old) =>
         old?.map((b) => (b.id === result.id ? { ...b, ...result } : b)),
@@ -283,9 +296,12 @@ function Admin() {
       ...f,
       destination,
       country: match?.country || f.country,
-      coords: keepCustomPin && sanitizeCoords(f.coords) && !isDestinationDefaultPin(f.coords, f.destination, destinations.data)
-        ? f.coords
-        : pin,
+      coords:
+        keepCustomPin &&
+        sanitizeCoords(f.coords) &&
+        !isDestinationDefaultPin(f.coords, f.destination, destinations.data)
+          ? f.coords
+          : pin,
     }));
     setMapPaste("");
   };
@@ -314,7 +330,13 @@ function Admin() {
       durationDays: isPackage ? undefined : kind === "stay" ? 2 : 1,
       durationNights: isPackage ? undefined : kind === "stay" ? 1 : 0,
       price: 0,
-      category: isPackage ? "Travel package" : kind === "stay" ? "Stay" : kind === "restaurant" ? "Dining" : "Experience",
+      category: isPackage
+        ? "Travel package"
+        : kind === "stay"
+          ? "Stay"
+          : kind === "restaurant"
+            ? "Dining"
+            : "Experience",
       destination: preferred?.name ?? "El Nido",
       country: preferred?.country ?? "Palawan",
       coords: coordsForDestination(preferred?.name ?? "El Nido", destinations.data),
@@ -352,8 +374,7 @@ function Admin() {
       autoEndDate: listing.autoEndDate !== false,
       pricingType: resolvePricingType(listing),
       packageIds:
-        listing.packageIds ??
-        (listing.packages?.length ? listing.packages.map((p) => p.id) : []),
+        listing.packageIds ?? (listing.packages?.length ? listing.packages.map((p) => p.id) : []),
       packages: listing.packages ?? [],
       seatsLeft: listing.seatsLeft,
       discountPct: listing.discountPct,
@@ -394,14 +415,13 @@ function Admin() {
           .filter(Boolean),
         discountPct:
           form.discountPct && form.discountPct > 0 ? Math.min(90, form.discountPct) : undefined,
-        coords: sanitizeCoords(form.coords) ?? coordsForDestination(form.destination, destinations.data),
+        coords:
+          sanitizeCoords(form.coords) ?? coordsForDestination(form.destination, destinations.data),
         showMap: form.showMap !== false,
         mapHidden: form.showMap === false,
         available: form.available !== false,
         unavailableReason:
-          form.available === false
-            ? form.unavailableReason?.trim() || undefined
-            : undefined,
+          form.available === false ? form.unavailableReason?.trim() || undefined : undefined,
         images: form.images.length
           ? form.images
           : [
@@ -477,17 +497,20 @@ function Admin() {
       }
       toast.success("Admin invite saved — they become admin when they register");
       setInviteEmail("");
-      qc.setQueryData(["admin-team", user?.email], (old: Awaited<ReturnType<typeof listAdmins>> | undefined) => {
-        if (!old?.ok) {
-          return {
-            ok: true as const,
-            invites: result.invites,
-            mainAdmin: isMainAdminEmail(user!.email),
-            admins: [],
-          };
-        }
-        return { ...old, invites: result.invites };
-      });
+      qc.setQueryData(
+        ["admin-team", user?.email],
+        (old: Awaited<ReturnType<typeof listAdmins>> | undefined) => {
+          if (!old?.ok) {
+            return {
+              ok: true as const,
+              invites: result.invites,
+              mainAdmin: isMainAdminEmail(user!.email),
+              admins: [],
+            };
+          }
+          return { ...old, invites: result.invites };
+        },
+      );
       void qc.invalidateQueries({ queryKey: ["admin-team"] });
     },
     onError: () => toast.error("Invite failed"),
@@ -524,14 +547,17 @@ function Admin() {
         return;
       }
       toast.success(result.wasActiveAdmin ? "Admin removed" : "Invite removed");
-      qc.setQueryData(["admin-team", user?.email], (old: Awaited<ReturnType<typeof listAdmins>> | undefined) => {
-        if (!old?.ok) return old;
-        return {
-          ...old,
-          invites: result.invites,
-          admins: old.admins.filter((a) => a.email !== email),
-        };
-      });
+      qc.setQueryData(
+        ["admin-team", user?.email],
+        (old: Awaited<ReturnType<typeof listAdmins>> | undefined) => {
+          if (!old?.ok) return old;
+          return {
+            ...old,
+            invites: result.invites,
+            admins: old.admins.filter((a) => a.email !== email),
+          };
+        },
+      );
       void qc.invalidateQueries({ queryKey: ["admin-team"] });
     },
     onError: () => toast.error("Could not remove admin"),
@@ -567,7 +593,9 @@ function Admin() {
     return (
       <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 px-4 pt-28 text-center">
         <p className="text-sm text-muted-foreground">
-          {!user ? "Sign in with an admin account to open the console." : "This account is not an admin."}
+          {!user
+            ? "Sign in with an admin account to open the console."
+            : "This account is not an admin."}
         </p>
         <Button asChild variant="hero" className="rounded-full">
           <Link to={!user ? "/auth" : "/dashboard"}>{!user ? "Sign in" : "Go to dashboard"}</Link>
@@ -578,206 +606,209 @@ function Admin() {
 
   const mainAdmin = user ? isMainAdminEmail(user.email) : false;
 
+  const statCards: { label: string; value: string | number; Icon: LucideIcon; accent?: boolean }[] =
+    [
+      {
+        label: "Pending bookings",
+        value: pendingBookings.length,
+        Icon: CreditCard,
+        accent: pendingBookings.length > 0,
+      },
+      { label: "Listings", value: listings.data?.length ?? 0, Icon: Compass },
+      {
+        label: "Customers",
+        value: customers.data?.ok ? customers.data.customers.length : "—",
+        Icon: Users,
+      },
+      {
+        label: "Admins",
+        value: admins.data?.ok ? adminTeam.length : "—",
+        Icon: ShieldCheck,
+      },
+    ];
+
+  const adminTabs: { value: string; label: string; shortLabel: string; Icon: LucideIcon }[] = [
+    { value: "bookings", label: "Bookings", shortLabel: "Bookings", Icon: CreditCard },
+    { value: "calendar", label: "Calendar", shortLabel: "Calendar", Icon: CalendarDays },
+    { value: "packages", label: "Packages", shortLabel: "Packages", Icon: Package },
+    {
+      value: "content",
+      label: "Tours · Stays · Dining",
+      shortLabel: "Listings",
+      Icon: Compass,
+    },
+    { value: "destinations", label: "Destinations", shortLabel: "Places", Icon: MapPin },
+    { value: "revenue", label: "Revenue", shortLabel: "Revenue", Icon: Coins },
+    { value: "contact", label: "Contact details", shortLabel: "Contact", Icon: Phone },
+    { value: "policies", label: "Policies", shortLabel: "Policies", Icon: ScrollText },
+    { value: "messages", label: "Messages", shortLabel: "Messages", Icon: MessageSquare },
+    { value: "customers", label: "Customers", shortLabel: "Guests", Icon: Users },
+    { value: "feedback", label: "Feedback", shortLabel: "Feedback", Icon: Star },
+    { value: "admins", label: "Admins", shortLabel: "Admins", Icon: ShieldCheck },
+  ];
+
   return (
-    <div className="pt-28 pb-16">
+    <div className="pt-24 pb-[max(4rem,calc(3rem+env(safe-area-inset-bottom)))] sm:pt-28">
       <div className="container-x">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
+        <div className="flex flex-col gap-3 sm:grid sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
           <div className="min-w-0">
             <span className="inline-flex items-center gap-2 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-primary">
               <ShieldCheck className="size-3.5" /> Administrator
             </span>
-            <h1 className="mt-4 truncate text-3xl font-semibold sm:text-4xl">Marketplace console</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
+            <h1 className="mt-3 truncate text-2xl font-semibold sm:mt-4 sm:text-4xl">
+              Marketplace console
+            </h1>
+            <p className="mt-1 truncate text-xs text-muted-foreground sm:mt-2 sm:text-sm">
               Signed in as {user?.email}
               {mainAdmin ? " · Main admin" : ""}
             </p>
           </div>
-          <Badge className="shrink-0 rounded-full border-0 bg-success/15 text-success">
+          <Badge className="hidden shrink-0 rounded-full border-0 bg-success/15 text-success sm:inline-flex">
             Live sync on
           </Badge>
         </div>
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground">Pending bookings</p>
-            <p className="mt-2 font-display text-3xl font-semibold">{pendingBookings.length}</p>
-          </div>
-          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground">Listings</p>
-            <p className="mt-2 font-display text-3xl font-semibold">{listings.data?.length ?? 0}</p>
-          </div>
-          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground">Customers</p>
-            <p className="mt-2 font-display text-3xl font-semibold">
-              {customers.data?.ok ? customers.data.customers.length : "—"}
-            </p>
-          </div>
-          <div className="rounded-3xl border border-border bg-card p-5 shadow-soft">
-            <p className="text-xs uppercase tracking-widest text-muted-foreground">Admins</p>
-            <p className="mt-2 font-display text-3xl font-semibold">
-              {admins.data?.ok ? adminTeam.length : "—"}
-            </p>
-          </div>
+        <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {statCards.map(({ label, value, Icon, accent }) => (
+            <div
+              key={label}
+              className="rounded-3xl border border-border bg-card p-4 shadow-soft sm:p-5"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground sm:text-xs">
+                  {label}
+                </p>
+                <span
+                  className={
+                    accent
+                      ? "grid size-7 place-items-center rounded-full bg-destructive/10 text-destructive"
+                      : "grid size-7 place-items-center rounded-full bg-primary/10 text-primary"
+                  }
+                >
+                  <Icon className={accent ? "size-3.5 animate-pulse" : "size-3.5"} />
+                </span>
+              </div>
+              <p className="mt-2 font-display text-2xl font-semibold sm:text-3xl">{value}</p>
+            </div>
+          ))}
         </div>
 
-        <div className="mt-8 rounded-3xl border border-border bg-card p-6 shadow-soft">
+        <div className="mt-6 rounded-3xl border border-border bg-card p-4 shadow-soft sm:mt-8 sm:p-6">
           <Tabs defaultValue="bookings">
-            <TabsList className="flex h-auto flex-wrap rounded-full">
-              <TabsTrigger value="bookings" className="rounded-full">
-                Bookings
-              </TabsTrigger>
-              <TabsTrigger value="calendar" className="rounded-full">
-                Calendar
-              </TabsTrigger>
-              <TabsTrigger value="packages" className="rounded-full">
-                Packages
-              </TabsTrigger>
-              <TabsTrigger value="content" className="rounded-full">
-                Tours · Stays · Dining
-              </TabsTrigger>
-              <TabsTrigger value="destinations" className="rounded-full">
-                Destinations
-              </TabsTrigger>
-              <TabsTrigger value="revenue" className="rounded-full">
-                Revenue
-              </TabsTrigger>
-              <TabsTrigger value="contact" className="rounded-full">
-                Contact details
-              </TabsTrigger>
-              <TabsTrigger value="policies" className="rounded-full">
-                Policies
-              </TabsTrigger>
-              <TabsTrigger value="messages" className="rounded-full">
-                Messages
-              </TabsTrigger>
-              <TabsTrigger value="customers" className="rounded-full">
-                Customers
-              </TabsTrigger>
-              <TabsTrigger value="admins" className="rounded-full">
-                Admins
-              </TabsTrigger>
-            </TabsList>
+            <div className="-mx-4 overflow-x-auto px-4 pb-1 no-scrollbar [scrollbar-width:none] sm:mx-0 sm:px-0">
+              <TabsList className="flex h-auto w-max min-w-full items-center gap-1 rounded-full p-1">
+                {adminTabs.map(({ value, label, shortLabel, Icon }) => (
+                  <TabsTrigger
+                    key={value}
+                    value={value}
+                    title={label}
+                    className="shrink-0 gap-1.5 rounded-full px-3 py-2 text-xs sm:px-4 sm:text-sm"
+                  >
+                    <Icon className="size-4 shrink-0" />
+                    <span className="sm:hidden">{shortLabel}</span>
+                    <span className="hidden sm:inline">{label}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
 
             <TabsContent value="bookings" className="mt-6 space-y-6">
               <LiveBookingFeed />
               <div className="overflow-x-auto">
-              {bookings.isLoading ? (
-                <Skeleton className="h-40 w-full rounded-2xl" />
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Reference</TableHead>
-                      <TableHead>Guest</TableHead>
-                      <TableHead>Listing</TableHead>
-                      <TableHead>Start</TableHead>
-                      <TableHead>End</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Package</TableHead>
-                      <TableHead>Guests</TableHead>
-                      <TableHead>Total</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Moderate</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {bookings.data?.map((b) => (
-                      <TableRow
-                        key={b.id}
-                        className="cursor-pointer"
-                        onClick={() => setBookingDetail(b)}
-                      >
-                        <TableCell className="font-mono text-xs">{b.reference}</TableCell>
-                        <TableCell>
-                          <div className="min-w-0">
-                            <p className="truncate whitespace-nowrap font-medium">{b.customer}</p>
-                            {b.customerEmail ? (
-                              <p className="truncate text-xs text-muted-foreground">{b.customerEmail}</p>
-                            ) : null}
-                            {b.customerPhone ? (
-                              <p className="truncate text-xs text-muted-foreground">{b.customerPhone}</p>
-                            ) : null}
-                            {b.guestCheckout ? (
-                              <Badge
-                                variant="outline"
-                                className="mt-1 rounded-full border-primary/40 bg-primary/10 px-2 py-0 text-[10px] font-medium uppercase tracking-wide text-primary"
-                              >
-                                Guest · no account
-                              </Badge>
-                            ) : null}
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-[220px] truncate">{b.listingTitle}</TableCell>
-                        <TableCell className="whitespace-nowrap text-xs">
-                          {formatDateTime(b.startDate || b.date, b.startTime) || b.date}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs">
-                          {formatDateTime(b.endDate || b.startDate || b.date, b.endTime) ||
-                            b.endDate ||
-                            b.date}
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs">
-                          {bookingDurationLabel(b)}
-                        </TableCell>
-                        <TableCell className="max-w-[120px] truncate text-xs">
-                          {b.packageNameSnapshot || "—"}
-                          {b.pricingType ? (
-                            <p className="text-[11px] text-muted-foreground">
-                              {PRICING_TYPE_LABELS[b.pricingType] ?? b.pricingType.replaceAll("_", " ")}
-                            </p>
-                          ) : null}
-                        </TableCell>
-                        <TableCell>{b.guests}</TableCell>
-                        <TableCell>{peso(b.total)}</TableCell>
-                        <TableCell>
-                          <StatusBadge status={b.status} />
-                          {b.paymentMethod ? (
-                            <p className="mt-1 whitespace-nowrap text-[11px] text-muted-foreground">
-                              via {b.paymentMethod}
-                            </p>
-                          ) : null}
-                          {b.statusUpdatedAt ? (
-                            <p className="mt-1 whitespace-nowrap text-[11px] text-muted-foreground">
-                              {new Date(b.statusUpdatedAt).toLocaleString()}
-                            </p>
-                          ) : null}
-                          {b.adminNote ? (
-                            <p className="max-w-[200px] truncate text-[11px] italic text-muted-foreground">
-                              “{b.adminNote}”
-                            </p>
-                          ) : null}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {b.status === "pending" ? (
-                            <div className="flex justify-end gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="rounded-full"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setReviewNote("");
-                                  setReview({ booking: b, status: "rejected" });
-                                }}
-                              >
-                                <XCircle className="size-4" /> Reject
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="rounded-full"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setReviewNote("");
-                                  setReview({ booking: b, status: "approved" });
-                                }}
-                              >
-                                <CheckCircle2 className="size-4" /> Approve
-                              </Button>
+                {bookings.isLoading ? (
+                  <Skeleton className="h-40 w-full rounded-2xl" />
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Reference</TableHead>
+                        <TableHead>Guest</TableHead>
+                        <TableHead>Listing</TableHead>
+                        <TableHead>Start</TableHead>
+                        <TableHead>End</TableHead>
+                        <TableHead>Duration</TableHead>
+                        <TableHead>Package</TableHead>
+                        <TableHead>Guests</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="text-right">Moderate</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {bookings.data?.map((b) => (
+                        <TableRow
+                          key={b.id}
+                          className="cursor-pointer"
+                          onClick={() => setBookingDetail(b)}
+                        >
+                          <TableCell className="font-mono text-xs">{b.reference}</TableCell>
+                          <TableCell>
+                            <div className="min-w-0">
+                              <p className="truncate whitespace-nowrap font-medium">{b.customer}</p>
+                              {b.customerEmail ? (
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {b.customerEmail}
+                                </p>
+                              ) : null}
+                              {b.customerPhone ? (
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {b.customerPhone}
+                                </p>
+                              ) : null}
+                              {b.guestCheckout ? (
+                                <Badge
+                                  variant="outline"
+                                  className="mt-1 rounded-full border-primary/40 bg-primary/10 px-2 py-0 text-[10px] font-medium uppercase tracking-wide text-primary"
+                                >
+                                  Guest · no account
+                                </Badge>
+                              ) : null}
                             </div>
-                          ) : ["approved", "confirmed", "partial_payment"].includes(b.status) ? (
-                            <div className="flex justify-end gap-2">
-                              {b.status !== "partial_payment" ? (
+                          </TableCell>
+                          <TableCell className="max-w-[220px] truncate">{b.listingTitle}</TableCell>
+                          <TableCell className="whitespace-nowrap text-xs">
+                            {formatDateTime(b.startDate || b.date, b.startTime) || b.date}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs">
+                            {formatDateTime(b.endDate || b.startDate || b.date, b.endTime) ||
+                              b.endDate ||
+                              b.date}
+                          </TableCell>
+                          <TableCell className="whitespace-nowrap text-xs">
+                            {bookingDurationLabel(b)}
+                          </TableCell>
+                          <TableCell className="max-w-[120px] truncate text-xs">
+                            {b.packageNameSnapshot || "—"}
+                            {b.pricingType ? (
+                              <p className="text-[11px] text-muted-foreground">
+                                {PRICING_TYPE_LABELS[b.pricingType] ??
+                                  b.pricingType.replaceAll("_", " ")}
+                              </p>
+                            ) : null}
+                          </TableCell>
+                          <TableCell>{b.guests}</TableCell>
+                          <TableCell>{peso(b.total)}</TableCell>
+                          <TableCell>
+                            <StatusBadge status={b.status} />
+                            {b.paymentMethod ? (
+                              <p className="mt-1 whitespace-nowrap text-[11px] text-muted-foreground">
+                                via {b.paymentMethod}
+                              </p>
+                            ) : null}
+                            {b.statusUpdatedAt ? (
+                              <p className="mt-1 whitespace-nowrap text-[11px] text-muted-foreground">
+                                {new Date(b.statusUpdatedAt).toLocaleString()}
+                              </p>
+                            ) : null}
+                            {b.adminNote ? (
+                              <p className="max-w-[200px] truncate text-[11px] italic text-muted-foreground">
+                                “{b.adminNote}”
+                              </p>
+                            ) : null}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {b.status === "pending" ? (
+                              <div className="flex justify-end gap-2">
                                 <Button
                                   size="sm"
                                   variant="ghost"
@@ -785,51 +816,79 @@ function Admin() {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     setReviewNote("");
-                                    setReview({ booking: b, status: "partial_payment" });
+                                    setReview({ booking: b, status: "rejected" });
                                   }}
                                 >
-                                  Partial payment
+                                  <XCircle className="size-4" /> Reject
                                 </Button>
-                              ) : null}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="rounded-full"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setReviewNote("");
-                                  setReview({ booking: b, status: "completed_payment" });
-                                }}
-                              >
-                                Completed payment
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="rounded-full text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setReviewNote("");
-                                  setReview({ booking: b, status: "rejected" });
-                                }}
-                              >
-                                <XCircle className="size-4" /> Reject
-                              </Button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-              {!bookings.isLoading && !bookings.data?.length ? (
-                <p className="py-12 text-center text-sm text-muted-foreground">
-                  No bookings yet. Client reservations will appear here automatically.
-                </p>
-              ) : null}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="rounded-full"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setReviewNote("");
+                                    setReview({ booking: b, status: "approved" });
+                                  }}
+                                >
+                                  <CheckCircle2 className="size-4" /> Approve
+                                </Button>
+                              </div>
+                            ) : ["approved", "confirmed", "partial_payment"].includes(b.status) ? (
+                              <div className="flex justify-end gap-2">
+                                {b.status !== "partial_payment" ? (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="rounded-full"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setReviewNote("");
+                                      setReview({ booking: b, status: "partial_payment" });
+                                    }}
+                                  >
+                                    Partial payment
+                                  </Button>
+                                ) : null}
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="rounded-full"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setReviewNote("");
+                                    setReview({ booking: b, status: "completed_payment" });
+                                  }}
+                                >
+                                  Completed payment
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="rounded-full text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setReviewNote("");
+                                    setReview({ booking: b, status: "rejected" });
+                                  }}
+                                >
+                                  <XCircle className="size-4" /> Reject
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                {!bookings.isLoading && !bookings.data?.length ? (
+                  <p className="py-12 text-center text-sm text-muted-foreground">
+                    No bookings yet. Client reservations will appear here automatically.
+                  </p>
+                ) : null}
               </div>
             </TabsContent>
 
@@ -849,7 +908,11 @@ function Admin() {
                 <Button className="rounded-full" variant="hero" onClick={() => openCreate("tour")}>
                   <Plus className="size-4" /> Add tour
                 </Button>
-                <Button className="rounded-full" variant="outline" onClick={() => openCreate("stay")}>
+                <Button
+                  className="rounded-full"
+                  variant="outline"
+                  onClick={() => openCreate("stay")}
+                >
                   <Plus className="size-4" /> Add stay
                 </Button>
                 <Button
@@ -873,10 +936,7 @@ function Admin() {
                     <Skeleton key={i} className="h-20 w-full rounded-2xl" />
                   ))
                 : listings.data?.map((l) => (
-                    <div
-                      key={l.id}
-                      className="rounded-2xl border border-border p-4"
-                    >
+                    <div key={l.id} className="rounded-2xl border border-border p-4">
                       <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4">
                         <div className="flex min-w-0 items-center gap-4">
                           <img
@@ -1014,11 +1074,13 @@ function Admin() {
                 isMainAdmin={mainAdmin}
                 removingEmail={deleteCustomer.isPending ? deleteCustomer.variables : null}
                 onRemove={
-                  mainAdmin
-                    ? (customer) => deleteCustomer.mutate(customer.email)
-                    : undefined
+                  mainAdmin ? (customer) => deleteCustomer.mutate(customer.email) : undefined
                 }
               />
+            </TabsContent>
+
+            <TabsContent value="feedback" className="mt-6">
+              {user ? <TestimonialsPanel actorEmail={user.email} /> : null}
             </TabsContent>
 
             <TabsContent value="admins" className="mt-6 space-y-6">
@@ -1038,8 +1100,17 @@ function Admin() {
                     className="h-11 rounded-xl"
                     required
                   />
-                  <Button type="submit" variant="hero" className="rounded-full" disabled={invite.isPending}>
-                    {invite.isPending ? <Loader2 className="size-4 animate-spin" /> : "Invite as admin"}
+                  <Button
+                    type="submit"
+                    variant="hero"
+                    className="rounded-full"
+                    disabled={invite.isPending}
+                  >
+                    {invite.isPending ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      "Invite as admin"
+                    )}
                   </Button>
                 </form>
               ) : (
@@ -1257,7 +1328,8 @@ function Admin() {
                       const raw = e.target.value;
                       setForm((f) => ({
                         ...f,
-                        discountPct: raw === "" ? undefined : Math.min(90, Math.max(0, Number(raw))),
+                        discountPct:
+                          raw === "" ? undefined : Math.min(90, Math.max(0, Number(raw))),
                       }));
                     }}
                   />
@@ -1649,13 +1721,13 @@ function Admin() {
                   </div>
                   {isDestinationDefaultPin(form.coords, form.destination, destinations.data) ? (
                     <p className="text-xs text-muted-foreground">
-                      Currently using the {form.destination} town pin. Paste a map link for the exact
-                      stay, restaurant or meeting point.
+                      Currently using the {form.destination} town pin. Paste a map link for the
+                      exact stay, restaurant or meeting point.
                     </p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      Custom pin saved with this listing. Changing destination will move it unless you
-                      paste a new map link.
+                      Custom pin saved with this listing. Changing destination will move it unless
+                      you paste a new map link.
                     </p>
                   )}
                   {sanitizeCoords(form.coords) ? (
@@ -1711,7 +1783,8 @@ function Admin() {
               {review
                 ? `${review.booking.reference} · ${review.booking.customer} · ${peso(review.booking.total)}`
                 : ""}
-              {review && (review.status === "partial_payment" || review.status === "completed_payment") ? (
+              {review &&
+              (review.status === "partial_payment" || review.status === "completed_payment") ? (
                 <span className="mt-1 block">
                   {review.status === "partial_payment"
                     ? "The tourist has settled part of the total. They still owe the remaining balance."
@@ -1754,9 +1827,7 @@ function Admin() {
                 />
                 <p className="text-xs text-muted-foreground">
                   Saved with a timestamp and shown on the traveller&apos;s dashboard.
-                  {review.status === "rejected"
-                    ? " Also sent to the admin Telegram group."
-                    : ""}
+                  {review.status === "rejected" ? " Also sent to the admin Telegram group." : ""}
                 </p>
               </div>
               <div className="flex justify-end gap-2">

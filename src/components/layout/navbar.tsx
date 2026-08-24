@@ -6,7 +6,9 @@ import {
   Menu,
   Moon,
   Sun,
+  Sunset,
   UserRound,
+  Waves,
   Sparkles,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -47,9 +49,17 @@ export function Navbar() {
     refetchInterval: 30_000,
   });
   const unreadCount = notifications.data?.filter((n) => !n.read).length ?? 0;
-  const { theme, toggle } = useTheme();
+  const { theme, setTheme } = useTheme();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const overHero = pathname === "/" && !scrolled;
+
+  const THEME_META = {
+    light: { label: "Daybreak", icon: Sun, next: "sunset" as const },
+    sunset: { label: "Sunset", icon: Sunset, next: "ocean" as const },
+    ocean: { label: "Ocean", icon: Waves, next: "dark" as const },
+    dark: { label: "Midnight", icon: Moon, next: "light" as const },
+  } as const;
+  const currentTheme = THEME_META[theme];
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -111,9 +121,7 @@ export function Navbar() {
               to="/planner"
               className={cn(
                 "ml-1 inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors",
-                overHero
-                  ? "text-gold hover:bg-background/15"
-                  : "text-primary hover:bg-primary/10",
+                overHero ? "text-gold hover:bg-background/15" : "text-primary hover:bg-primary/10",
               )}
             >
               <Sparkles className="size-4" />
@@ -125,11 +133,15 @@ export function Navbar() {
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Toggle colour theme"
-              onClick={toggle}
-              className={cn("rounded-full", overHero && "text-deep-foreground hover:bg-background/15")}
+              aria-label={`Colour theme: ${currentTheme.label}. Switch to ${THEME_META[currentTheme.next].label}`}
+              title={`Theme: ${currentTheme.label} — tap for ${THEME_META[currentTheme.next].label}`}
+              onClick={() => setTheme(currentTheme.next)}
+              className={cn(
+                "rounded-full",
+                overHero && "text-deep-foreground hover:bg-background/15",
+              )}
             >
-              {theme === "dark" ? <Sun className="size-4.5" /> : <Moon className="size-4.5" />}
+              <currentTheme.icon className="size-4.5" />
             </Button>
 
             <Button
@@ -137,7 +149,10 @@ export function Navbar() {
               size="icon"
               aria-label="Notifications"
               asChild
-              className={cn("relative rounded-full", overHero && "text-deep-foreground hover:bg-background/15")}
+              className={cn(
+                "relative rounded-full",
+                overHero && "text-deep-foreground hover:bg-background/15",
+              )}
             >
               <Link to="/dashboard">
                 <Bell className="size-4.5" />
@@ -155,13 +170,18 @@ export function Navbar() {
                   variant="ghost"
                   size="icon"
                   aria-label="Account menu"
-                  className={cn("hidden rounded-full sm:inline-flex", overHero && "text-deep-foreground hover:bg-background/15")}
+                  className={cn(
+                    "hidden rounded-full sm:inline-flex",
+                    overHero && "text-deep-foreground hover:bg-background/15",
+                  )}
                 >
                   <UserRound className="size-4.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52 rounded-2xl">
-                <DropdownMenuLabel className="truncate">{user ? user.name : "Account"}</DropdownMenuLabel>
+                <DropdownMenuLabel className="truncate">
+                  {user ? user.name : "Account"}
+                </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link to="/dashboard">
@@ -187,11 +207,19 @@ export function Navbar() {
             </DropdownMenu>
 
             {user ? (
-              <Button asChild variant={overHero ? "sand" : "default"} className="hidden rounded-full md:inline-flex">
+              <Button
+                asChild
+                variant={overHero ? "sand" : "default"}
+                className="hidden rounded-full md:inline-flex"
+              >
                 <Link to="/dashboard">My trips</Link>
               </Button>
             ) : (
-              <Button asChild variant={overHero ? "sand" : "default"} className="hidden rounded-full md:inline-flex">
+              <Button
+                asChild
+                variant={overHero ? "sand" : "default"}
+                className="hidden rounded-full md:inline-flex"
+              >
                 <Link to="/auth">Sign in</Link>
               </Button>
             )}
@@ -202,7 +230,10 @@ export function Navbar() {
                   variant="ghost"
                   size="icon"
                   aria-label="Open menu"
-                  className={cn("rounded-full md:hidden", overHero && "text-deep-foreground hover:bg-background/15")}
+                  className={cn(
+                    "rounded-full md:hidden",
+                    overHero && "text-deep-foreground hover:bg-background/15",
+                  )}
                 >
                   <Menu className="size-5" />
                 </Button>
@@ -220,14 +251,26 @@ export function Navbar() {
                       {item.label}
                     </Link>
                   ))}
-                  <Link to="/planner" onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-medium text-primary hover:bg-muted">
+                  <Link
+                    to="/planner"
+                    onClick={() => setOpen(false)}
+                    className="rounded-xl px-3 py-3 text-base font-medium text-primary hover:bg-muted"
+                  >
                     Trip Planner
                   </Link>
-                  <Link to="/dashboard" onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-medium hover:bg-muted">
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setOpen(false)}
+                    className="rounded-xl px-3 py-3 text-base font-medium hover:bg-muted"
+                  >
                     My dashboard
                   </Link>
                   {isAdmin ? (
-                    <Link to="/admin" onClick={() => setOpen(false)} className="rounded-xl px-3 py-3 text-base font-medium hover:bg-muted">
+                    <Link
+                      to="/admin"
+                      onClick={() => setOpen(false)}
+                      className="rounded-xl px-3 py-3 text-base font-medium hover:bg-muted"
+                    >
                       Admin console
                     </Link>
                   ) : null}

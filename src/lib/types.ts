@@ -258,6 +258,11 @@ export interface HubSettings {
    * the listing's own cancellationPolicy when blank.
    */
   cancellationNotice?: string;
+  /**
+   * Free NEXI AI messages per visitor per day (FAQ answers are always free).
+   * Undefined / 0 falls back to the built-in default of 10.
+   */
+  chatDailyLimit?: number;
 }
 
 

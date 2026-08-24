@@ -28,7 +28,7 @@ import { Route as ApiAuthProfileRouteImport } from './routes/api/auth/profile'
 import { Route as ApiAuthRegisterRouteImport } from './routes/api/auth/register'
 import { Route as ApiAuthSignInRouteImport } from './routes/api/auth/sign-in'
 import { Route as ApiAuthSignOutRouteImport } from './routes/api/auth/sign-out'
-import { Route as ApiPublicKeepaliveRouteImport } from './routes/api/public/keepalive'
+import { Route as ApiPublicHealthRouteImport } from './routes/api/public/health'
 import { Route as ApiPublicBookingReferenceRouteImport } from './routes/api/public/booking.$reference'
 
 const IndexRoute = IndexRouteImport.update({
@@ -126,9 +126,9 @@ const ApiAuthSignOutRoute = ApiAuthSignOutRouteImport.update({
   path: '/api/auth/sign-out',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiPublicKeepaliveRoute = ApiPublicKeepaliveRouteImport.update({
-  id: '/api/public/keepalive',
-  path: '/api/public/keepalive',
+const ApiPublicHealthRoute = ApiPublicHealthRouteImport.update({
+  id: '/api/public/health',
+  path: '/api/public/health',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPublicBookingReferenceRoute =
@@ -158,7 +158,7 @@ export interface FileRoutesByFullPath {
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
-  '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/booking/$reference': typeof ApiPublicBookingReferenceRoute
 }
 export interface FileRoutesByTo {
@@ -181,7 +181,7 @@ export interface FileRoutesByTo {
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
-  '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/booking/$reference': typeof ApiPublicBookingReferenceRoute
 }
 export interface FileRoutesById {
@@ -205,7 +205,7 @@ export interface FileRoutesById {
   '/api/auth/register': typeof ApiAuthRegisterRoute
   '/api/auth/sign-in': typeof ApiAuthSignInRoute
   '/api/auth/sign-out': typeof ApiAuthSignOutRoute
-  '/api/public/keepalive': typeof ApiPublicKeepaliveRoute
+  '/api/public/health': typeof ApiPublicHealthRoute
   '/api/public/booking/$reference': typeof ApiPublicBookingReferenceRoute
 }
 export interface FileRouteTypes {
@@ -230,7 +230,7 @@ export interface FileRouteTypes {
     | '/api/auth/register'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
-    | '/api/public/keepalive'
+    | '/api/public/health'
     | '/api/public/booking/$reference'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -253,7 +253,7 @@ export interface FileRouteTypes {
     | '/api/auth/register'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
-    | '/api/public/keepalive'
+    | '/api/public/health'
     | '/api/public/booking/$reference'
   id:
     | '__root__'
@@ -276,7 +276,7 @@ export interface FileRouteTypes {
     | '/api/auth/register'
     | '/api/auth/sign-in'
     | '/api/auth/sign-out'
-    | '/api/public/keepalive'
+    | '/api/public/health'
     | '/api/public/booking/$reference'
   fileRoutesById: FileRoutesById
 }
@@ -300,7 +300,7 @@ export interface RootRouteChildren {
   ApiAuthRegisterRoute: typeof ApiAuthRegisterRoute
   ApiAuthSignInRoute: typeof ApiAuthSignInRoute
   ApiAuthSignOutRoute: typeof ApiAuthSignOutRoute
-  ApiPublicKeepaliveRoute: typeof ApiPublicKeepaliveRoute
+  ApiPublicHealthRoute: typeof ApiPublicHealthRoute
   ApiPublicBookingReferenceRoute: typeof ApiPublicBookingReferenceRoute
 }
 
@@ -439,11 +439,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAuthSignOutRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/keepalive': {
-      id: '/api/public/keepalive'
-      path: '/api/public/keepalive'
-      fullPath: '/api/public/keepalive'
-      preLoaderRoute: typeof ApiPublicKeepaliveRouteImport
+    '/api/public/health': {
+      id: '/api/public/health'
+      path: '/api/public/health'
+      fullPath: '/api/public/health'
+      preLoaderRoute: typeof ApiPublicHealthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/booking/$reference': {
@@ -476,7 +476,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiAuthRegisterRoute: ApiAuthRegisterRoute,
   ApiAuthSignInRoute: ApiAuthSignInRoute,
   ApiAuthSignOutRoute: ApiAuthSignOutRoute,
-  ApiPublicKeepaliveRoute: ApiPublicKeepaliveRoute,
+  ApiPublicHealthRoute: ApiPublicHealthRoute,
   ApiPublicBookingReferenceRoute: ApiPublicBookingReferenceRoute,
 }
 export const routeTree = rootRouteImport

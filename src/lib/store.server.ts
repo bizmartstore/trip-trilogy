@@ -92,6 +92,12 @@ export interface HubState {
   pushReminderDayOfSent?: string[];
   /** Booking ids that already received the admin “new booking” push (guest + registered). */
   pushBookingNewSent?: string[];
+  /**
+   * Tombstones for deleted feedback ("testimonial:<id>" / "review:<listingId>:<reviewId>").
+   * Stops the merge-on-write union from resurrecting feedback an admin removed
+   * on a different worker isolate.
+   */
+  feedbackDeletedIds?: string[];
 }
 
 const GLOBAL_KEY = "__nexora_store_v1__";
@@ -117,6 +123,7 @@ export const defaultSettings: HubSettings = {
   policyCancellation: "",
   policyHelp: "",
   cancellationNotice: "",
+  chatDailyLimit: 10,
 };
 
 const SEED_REVIEW_IDS = new Set(["r1", "r2", "r3"]);
@@ -437,6 +444,42 @@ function mergeRemoteIntoState(
       }
     }
   }
+  // Feedback (testimonials + listing reviews) is part of the same whole-document
+  // write. Union by id so a stale isolate can never erase feedback posted via
+  // another isolate (posted feedback vanishing after a restart/redeploy), while
+  // the tombstone list keeps admin deletions authoritative.
+  const tombstones = new Set(state.feedbackDeletedIds ?? []);
+  if (Array.isArray(remote.testimonials)) {
+    const byId = new Map(state.testimonials.map((t) => [t.id, t]));
+    for (const testimonial of remote.testimonials) {
+      if (!testimonial?.id || tombstones.has(`testimonial:${testimonial.id}`)) continue;
+      const current = byId.get(testimonial.id);
+      if (
+        !current ||
+        Date.parse(testimonial.createdAt ?? "") >= Date.parse(current.createdAt ?? "")
+      ) {
+        byId.set(testimonial.id, testimonial);
+      }
+    }
+    state.testimonials = [...byId.values()].sort(
+      (a, b) => Date.parse(b.createdAt ?? "") - Date.parse(a.createdAt ?? ""),
+    );
+  }
+  if (Array.isArray(remote.listings)) {
+    for (const remoteListing of remote.listings) {
+      if (!remoteListing?.id || !Array.isArray(remoteListing.reviews)) continue;
+      const listing = state.listings.find((l) => l.id === remoteListing.id);
+      if (!listing) continue;
+      if (!listing.reviews) listing.reviews = [];
+      const byId = new Map(listing.reviews.map((r) => [r.id, r]));
+      for (const review of remoteListing.reviews) {
+        if (!review?.id || tombstones.has(`review:${listing.id}:${review.id}`)) continue;
+        if (!byId.has(review.id)) byId.set(review.id, review);
+      }
+      listing.reviews = [...byId.values()];
+      recalculateListingRating(listing);
+    }
+  }
   // Adopt admin-managed settings that ANOTHER isolate persisted after our last
   // sync. state.revision was already incremented for our pending write, so
   // "remoteRevision > state.revision - 1" means someone else wrote since we
@@ -648,7 +691,7 @@ function markPushBookingNewSent(state: HubState, bookingId: string) {
 
 /**
  * Admin push for every booking that appears in the Admin Bookings feed —
- * guest (not registered) and registered alike. Safe from keepalive; dedupes via
+ * guest (not registered) and registered alike. Safe from the cron maintenance job; dedupes via
  * `pushBookingNewSent`. Uses the same booking list admins see, not account signup.
  */
 export async function processNewBookingAdminPushes() {
@@ -700,7 +743,7 @@ export async function processNewBookingAdminPushes() {
  * Schedule reminders for approved bookings (Manila calendar):
  * - 1 day before → OneSignal admins + Telegram reminders group
  * - On the booking date → Telegram reminders group (+ OneSignal)
- * Safe to call from keepalive — dedupes via pushReminderSent / pushReminderDayOfSent.
+ * Safe to call from the cron maintenance job — dedupes via pushReminderSent / pushReminderDayOfSent.
  */
 export async function processBookingDayBeforeReminders() {
   const state = await ensureStore();
@@ -871,6 +914,7 @@ function emptySeed(): HubState {
     pushReminderSent: [],
     pushReminderDayOfSent: [],
     pushBookingNewSent: [],
+    feedbackDeletedIds: [],
   };
 }
 
@@ -907,6 +951,7 @@ function applyRemote(parsed: Partial<HubState> | null) {
     pushReminderSent: parsed.pushReminderSent ?? [],
     pushReminderDayOfSent: parsed.pushReminderDayOfSent ?? [],
     pushBookingNewSent: parsed.pushBookingNewSent ?? [],
+    feedbackDeletedIds: parsed.feedbackDeletedIds ?? [],
   };
   const g = globalThis as GlobalStore;
   const current = g[GLOBAL_KEY];
@@ -1006,7 +1051,7 @@ let lastHydratedAt = 0;
 
 export async function ensureStore(): Promise<HubState> {
   // Hydrate once on cold start, then refresh periodically. Isolates live a
-  // long time (the keepalive cron keeps them warm), and hydrating only once
+  // long time (the cron trigger keeps them warm), and hydrating only once
   // meant an isolate could serve pre-edit settings forever after an admin
   // saved changes on a different isolate.
   if (!hydratePromise || Date.now() - lastHydratedAt > HYDRATE_TTL_MS) {
@@ -1751,7 +1796,7 @@ export async function createBookingRecord(input: {
     markPushBookingNewSent(liveState, booking.id);
     await bumpAndWait(liveState);
   } else {
-    console.warn("[booking] admin push delivered to 0 devices — keepalive will retry", adminResult);
+    console.warn("[booking] admin push delivered to 0 devices — cron job will retry", adminResult);
   }
   if (input.customerEmail) {
     await deliverPushSafely("booking-submitted-tourist", () =>
@@ -2744,7 +2789,10 @@ export async function addTestimonialRecord(input: {
     createdAt: new Date().toISOString(),
   };
   state.testimonials.unshift(testimonial);
-  bump(state);
+  // Persist BEFORE responding — a fire-and-forget write can be cut short when
+  // the isolate freezes right after the response, which silently dropped
+  // posted feedback on every restart/redeploy.
+  await bumpAndWait(state);
 
   const { absoluteUrl, sendPushToEmails } = await import("@/lib/onesignal.server");
   await sendPushToEmails([email], {
@@ -2760,7 +2808,8 @@ export async function addTestimonialRecord(input: {
 export async function deleteTestimonialRecord(actorEmail: string, id: string) {
   const state = await assertAdmin(actorEmail);
   state.testimonials = state.testimonials.filter((t) => t.id !== id);
-  bump(state);
+  recordFeedbackTombstone(state, `testimonial:${id}`);
+  await bumpAndWait(state);
   return { id };
 }
 
@@ -2795,7 +2844,8 @@ export async function addListingReview(input: {
   };
   listing.reviews.unshift(review);
   recalculateListingRating(listing);
-  bump(state);
+  // Persist BEFORE responding so the review survives isolate freeze/redeploy.
+  await bumpAndWait(state);
 
   const { absoluteUrl, sendPushToEmails } = await import("@/lib/onesignal.server");
   await sendPushToEmails([email], {
@@ -2814,8 +2864,18 @@ export async function removeListingReview(actorEmail: string, listingId: string,
   if (!listing) throw new Error("Listing not found.");
   listing.reviews = (listing.reviews ?? []).filter((r) => r.id !== reviewId);
   recalculateListingRating(listing);
-  bump(state);
+  recordFeedbackTombstone(state, `review:${listingId}:${reviewId}`);
+  await bumpAndWait(state);
   return { id: reviewId };
+}
+
+/** Remember a feedback deletion across isolates so merge-on-write never resurrects it. */
+function recordFeedbackTombstone(state: HubState, key: string) {
+  if (!state.feedbackDeletedIds) state.feedbackDeletedIds = [];
+  if (!state.feedbackDeletedIds.includes(key)) state.feedbackDeletedIds.push(key);
+  if (state.feedbackDeletedIds.length > 500) {
+    state.feedbackDeletedIds = state.feedbackDeletedIds.slice(-400);
+  }
 }
 
 export async function toggleFavorite(email: string, listingId: string) {

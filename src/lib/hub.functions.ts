@@ -1,5 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
+
+import { getSessionUser } from "@/lib/session.server";
 
 import { applyListingMapFlags } from "@/lib/listing-map";
 import {
@@ -34,9 +37,9 @@ import {
   removeAdminInvite,
   removeCustomer,
   removeListingReview,
-   setBookingPaymentMethod,
-   setBookingStatus,
-   signInAccount,
+  setBookingPaymentMethod,
+  setBookingStatus,
+  signInAccount,
   toggleFavorite,
   updateDestinationRecord,
   updateListingRecord,
@@ -430,9 +433,7 @@ export const createDestinationFn = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }) =>
-    createDestinationRecord(data.actorEmail, data.destination),
-  );
+  .handler(async ({ data }) => createDestinationRecord(data.actorEmail, data.destination));
 
 export const updateDestinationFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
@@ -444,9 +445,7 @@ export const updateDestinationFn = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }) =>
-    updateDestinationRecord(data.actorEmail, data.id, data.patch),
-  );
+  .handler(async ({ data }) => updateDestinationRecord(data.actorEmail, data.id, data.patch));
 
 export const deleteDestinationFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
@@ -480,8 +479,7 @@ export const createPackageFn = createServerFn({ method: "POST" })
       active: data.package.active,
       position: data.package.position,
       durationDays: data.package.durationDays == null ? undefined : data.package.durationDays,
-      durationNights:
-        data.package.durationNights == null ? undefined : data.package.durationNights,
+      durationNights: data.package.durationNights == null ? undefined : data.package.durationNights,
       pricingType: data.package.pricingType,
     }),
   );
@@ -516,8 +514,7 @@ export const updatePackageFn = createServerFn({ method: "POST" })
       patch.durationDays = data.patch.durationDays == null ? null : data.patch.durationDays;
     }
     if ("durationNights" in data.patch) {
-      patch.durationNights =
-        data.patch.durationNights == null ? null : data.patch.durationNights;
+      patch.durationNights = data.patch.durationNights == null ? null : data.patch.durationNights;
     }
     if (data.patch.pricingType !== undefined) patch.pricingType = data.patch.pricingType;
     return updatePackageRecord(data.actorEmail, data.id, patch);
@@ -557,7 +554,10 @@ export const addTestimonialFn = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }) => addTestimonialRecord(data));
+  .handler(async ({ data }) => {
+    const sessionUser = await requireSessionUser();
+    return addTestimonialRecord({ ...data, email: sessionUser.email, author: sessionUser.name });
+  });
 
 export const deleteTestimonialFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
@@ -666,12 +666,20 @@ export const updateSettingsFn = createServerFn({ method: "POST" })
             policyCancellation: z.string().max(20000).optional(),
             policyHelp: z.string().max(20000).optional(),
             cancellationNotice: z.string().trim().max(600).optional(),
+            chatDailyLimit: z.number().int().min(0).max(200).optional(),
           })
           .partial(),
       })
       .parse(data),
   )
   .handler(async ({ data }) => updateSettings(data.actorEmail, data.patch));
+
+/** Resolve the signed-in account from the session cookie — never trust client-provided identity. */
+async function requireSessionUser() {
+  const sessionUser = await getSessionUser(getRequest());
+  if (!sessionUser) throw new Error("Sign in to continue.");
+  return sessionUser;
+}
 
 export const addListingReviewFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
@@ -685,7 +693,14 @@ export const addListingReviewFn = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }) => addListingReview(data));
+  .handler(async ({ data }) => {
+    const sessionUser = await requireSessionUser();
+    return addListingReview({
+      ...data,
+      email: sessionUser.email,
+      name: sessionUser.name || data.name,
+    });
+  });
 
 export const removeListingReviewFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
@@ -697,9 +712,7 @@ export const removeListingReviewFn = createServerFn({ method: "POST" })
       })
       .parse(data),
   )
-  .handler(async ({ data }) =>
-    removeListingReview(data.actorEmail, data.listingId, data.reviewId),
-  );
+  .handler(async ({ data }) => removeListingReview(data.actorEmail, data.listingId, data.reviewId));
 
 export const toggleFavoriteFn = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
@@ -716,9 +729,7 @@ export const listNotificationsFn = createServerFn({ method: "POST" })
   .handler(async ({ data }) => listNotifications(data.email));
 
 export const markNotificationReadFn = createServerFn({ method: "POST" })
-  .validator((data: unknown) =>
-    z.object({ email: emailSchema, id: z.string().min(1) }).parse(data),
-  )
+  .validator((data: unknown) => z.object({ email: emailSchema, id: z.string().min(1) }).parse(data))
   .handler(async ({ data }) => markNotificationRead(data.email, data.id));
 
 export const markAllNotificationsReadFn = createServerFn({ method: "POST" })
@@ -760,9 +771,8 @@ export const testAdminPushFn = createServerFn({ method: "POST" })
     if (!isMainAdminEmail(email) && account?.role !== "admin") {
       throw new Error("Admin only");
     }
-    const { absoluteUrl, sendPushToEmails, sendPushToRole, pushIdempotencyKey } = await import(
-      "@/lib/onesignal.server"
-    );
+    const { absoluteUrl, sendPushToEmails, sendPushToRole, pushIdempotencyKey } =
+      await import("@/lib/onesignal.server");
     const payload = {
       title: "Nexora push test",
       body: "Admin push works on this device. New bookings will alert you here.",
@@ -813,14 +823,3 @@ export const testAdminPushFn = createServerFn({ method: "POST" })
       };
     }
   });
-
-/** Keep-alive: tiny Supabase read that stops the database from idling out. */
-export const keepAliveFn = createServerFn({ method: "GET" }).handler(async () => {
-  const { pingSupabase, supabaseConfigured } = await import("@/lib/supabase-rest.server");
-  if (!supabaseConfigured()) return { ok: false as const, reason: "not-configured" };
-  try {
-    return await pingSupabase();
-  } catch {
-    return { ok: false as const, reason: "unreachable" };
-  }
-});
